@@ -206,7 +206,9 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
                 influx = await self._async_influx_prices(
                     now, horizon, price_series.first_hour
                 )
-                if influx is not None:
+                if influx is None:
+                    self.plan_meta["influx_status"] = "no_entry_or_bucket"
+                else:
                     imp, exp, meta = influx
                     self.plan_meta.update(meta)
                     if any(v is not None for v in imp):

@@ -122,10 +122,9 @@ def _sync_query_prices(
                     export_m, export_f,
                 )
             )
-            if discovered:
-                meta["influx_measurements"] = ",".join(
-                    str(m) for m in discovered[:30]
-                )
+            meta["influx_measurements"] = (
+                ",".join(str(m) for m in discovered[:30]) or "none"
+            )
         meta["import_series"] = (
             f"{import_m}.{import_f}" if import_m else "not_found"
         )
@@ -211,7 +210,8 @@ async def async_query_hourly_prices(
 ) -> tuple[dict[datetime, float], dict[datetime, float], dict] | None:
     """Fetch hourly price points covering the plan horizon.
 
-    ``now`` must be tz-aware. Returns None on any failure.
+    ``now`` must be tz-aware. Returns (imp, exp, meta) or None on
+    failure; meta carries the error so it is visible in plan_meta.
     """
     start = (now - timedelta(days=2)).replace(
         minute=0, second=0, microsecond=0
@@ -223,4 +223,4 @@ async def async_query_hourly_prices(
         )
     except Exception as err:  # noqa: BLE001 - optional source, degrade
         _LOGGER.debug("DSEM influx price query failed: %s", err)
-        return None
+        return {}, {}, {"influx_error": str(err)[:200]}
