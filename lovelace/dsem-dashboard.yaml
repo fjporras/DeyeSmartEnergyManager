@@ -54,31 +54,25 @@ views:
 
       - type: markdown
         title: Plan — resumen
-        content: >-
+        content: |
           {% set a =
-          states.sensor.deye_smart_energy_manager_proxima_accion_del_plan.attributes
-          %} {% if a.plan_available %}
-
+            states.sensor.deye_smart_energy_manager_proxima_accion_del_plan.attributes
+          %}
+          {%- if a.plan_available %}
           | Métrica | Valor |
           |---|---|
-          | Coste esperado | {{ '%.2f' %
-          a.expected_cost_eur }} € |
-          | Coste baseline | {{ '%.2f' %
-          a.baseline_cost_eur }} € |
-          | **Ahorro estimado** | **{{ '%.2f'
-          % a.expected_savings_eur }} €** |
-          | Precios | {{ a.price_source
-          }} ({{ a.import_series }}) |
+          | Coste esperado | {{ '%.2f' % a.expected_cost_eur }} € |
+          | Coste baseline | {{ '%.2f' % a.baseline_cost_eur }} € |
+          | **Ahorro estimado** | **{{ '%.2f' % a.expected_savings_eur }} €** |
+          | Precios | {{ a.price_source }} ({{ a.import_series }}) |
           | Vertido | {{ a.export_series }} |
           | Carga | {{ a.load_source }} |
           | FV | {{ a.pv_source }} |
           | Horas sin precio | {{ a.price_missing_hours }} |
-          | Warnings | {{ a.warnings |
-          join(', ') if a.warnings else '—' }} |
-
-          {% else %} Plan no disponible
-          (warnings: {{ a.warnings | join(', ') if a.warnings else '—' }})
-          {% endif %}
+          | Warnings | {{ a.warnings | join(', ') if a.warnings else '—' }} |
+          {%- else -%}
+          Plan no disponible (warnings: {{ a.warnings | join(', ') if a.warnings else '—' }})
+          {%- endif %}
 
       - type: history-graph
         title: Últimas 24 h
@@ -99,23 +93,18 @@ views:
     cards:
       - type: markdown
         title: Slots del plan (acción prevista por hora)
-        content: >-
+        content: |
           {% set slots =
-          state_attr('sensor.deye_smart_energy_manager_proxima_accion_del_plan',
-          'slots') or [] %} {% if slots %}
-
-          | Día | Hora | Acción | Bat W | Red W | SOC | €/kWh | Motivo
-          |
+            state_attr('sensor.deye_smart_energy_manager_proxima_accion_del_plan',
+            'slots') or [] %}
+          {%- if slots %}
+          | Día | Hora | Acción | Bat W | Red W | SOC | €/kWh | Motivo |
           |---|---|---|---|---|---|---|---|
-          {% for s in slots -%}
-          | {{ s.t[8:10] }}/{{ s.t[5:7] }} | {{ s.t[11:16] }} | {{
-          s.action }} | {{ s.batt_w | round(0) }} | {{ s.grid_w |
-          round(0) }} | {{ s.soc_end | round(0) }}% | {{ s.eur_kwh if
-          s.eur_kwh is not none else '—' }} | {{ s.why }} |
-          {% endfor %}
+          {%- for s in slots %}
+          | {{ s.t[8:10] }}/{{ s.t[5:7] }} | {{ s.t[11:16] }} | {{ s.action }} | {{ s.batt_w | round(0) }} | {{ s.grid_w | round(0) }} | {{ s.soc_end | round(0) }}% | {{ s.eur_kwh if s.eur_kwh is not none else '—' }} | {{ s.why }} |
+          {%- endfor %}
 
-          *convención: bat W <0 carga / >0 descarga · red W >0 importa
-          / <0 exporta*
-
-          {% else %} Sin slots — el plan no está disponible. {% endif
-          %}
+          *convención: bat W <0 carga / >0 descarga · red W >0 importa / <0 exporta*
+          {%- else -%}
+          Sin slots — el plan no está disponible.
+          {%- endif %}
