@@ -54,6 +54,7 @@ class InfluxSettings:
     token: str
     org: str
     bucket: str
+    api_version: str | None = None
     verify_ssl: bool = True
     import_measurement: str | None = None
     import_field: str | None = None
@@ -71,11 +72,12 @@ def get_influx_settings(hass, options: dict) -> InfluxSettings | None:
             break
     if base is None:
         return None
-    return InfluxSettings(
+    settings = InfluxSettings(
         url=base["url"],
         token=base["token"],
         org=base.get("org") or "-",
         bucket=base.get("bucket") or base.get("bucket_name") or "",
+        api_version=str(base.get("api_version") or ""),
         verify_ssl=bool(base.get("verify_ssl", True)),
         import_measurement=options.get(CONF_INFLUX_IMPORT_MEASUREMENT)
         or DEFAULT_INFLUX_IMPORT_MEASUREMENT,
@@ -84,6 +86,7 @@ def get_influx_settings(hass, options: dict) -> InfluxSettings | None:
         or DEFAULT_INFLUX_EXPORT_MEASUREMENT,
         export_field=options.get(CONF_INFLUX_EXPORT_FIELD) or None,
     )
+    return settings
 
 
 def _esc(value: str) -> str:
@@ -163,6 +166,8 @@ def _sync_query_prices(
                         continue
             return out
 
+        meta["influx_api_version"] = settings.api_version or "?"
+        meta["influx_bucket"] = settings.bucket
         return points(import_m, import_f), points(export_m, export_f), meta
     finally:
         client.close()
@@ -238,4 +243,6 @@ async def async_query_hourly_prices(
         )
     except Exception as err:  # noqa: BLE001 - optional source, degrade
         _LOGGER.debug("DSEM influx price query failed: %s", err)
-        return {}, {}, {"influx_error": str(err)[:200]}
+        # ApiException carries the Flux error detail in .body
+        detail = getattr(err, "body", None) or str(err)
+        return {}, {}, {"influx_error": str(detail)[:300]}
