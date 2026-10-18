@@ -1,0 +1,128 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Measurement entities",
+        "description": "Select the existing Home Assistant entities DSEM will read. Defaults correspond to the audited GTS Solutions installation.",
+        "data": {
+          "pv_power_entity": "PV production power (Fronius via Deye GEN port)",
+          "grid_power_entity": "Grid exchange power (external CTs, + import)",
+          "load_power_entity": "House consumption power (Deye load port)",
+          "battery_soc_entity": "Battery state of charge",
+          "battery_power_entity": "Battery power (− charging / + discharging)",
+          "price_import_entity": "Import price sensor (PVPC)"
+        },
+        "data_description": {
+          "pv_power_entity": "W or kW; e.g. the solarman microinverter power sensor",
+          "grid_power_entity": "W or kW; positive when importing",
+          "load_power_entity": "W or kW",
+          "battery_soc_entity": "Sensor in %",
+          "battery_power_entity": "W or kW; negative while charging",
+          "price_import_entity": "Sensor exposing price_XXh hourly attributes"
+        }
+      },
+      "optional": {
+        "title": "Optional entities",
+        "description": "Leave empty to disable the related feature. EV and water-heater features stay inactive until real entities exist.",
+        "data": {
+          "pv_forecast_entity": "PV forecast — energy today",
+          "pv_forecast_tomorrow_entity": "PV forecast — energy tomorrow",
+          "energy_import_entity": "Grid import energy counter",
+          "energy_export_entity": "Grid export energy counter"
+        },
+        "data_description": {
+          "pv_forecast_entity": "e.g. forecast_solar energy_production_today (kWh)",
+          "pv_forecast_tomorrow_entity": "e.g. forecast_solar energy_production_tomorrow (kWh)",
+          "energy_import_entity": "total_increasing energy sensor (kWh)",
+          "energy_export_entity": "total_increasing energy sensor (kWh)"
+        }
+      }
+    },
+    "error": {
+      "entity_missing": "Entity does not exist",
+      "entity_unavailable": "Entity is unavailable or unknown",
+      "invalid_unit": "Entity has an incompatible unit"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "DSEM options",
+        "description": "Battery limits, optimizer parameters and control gate. SHADOW is the only safe mode until control is explicitly enabled.",
+        "data": {
+          "mode": "Operating mode",
+          "enable_control": "Enable real control (writes to inverter entities)",
+          "battery_usable_kwh": "Usable battery capacity",
+          "soc_min_pct": "Minimum SOC",
+          "soc_max_pct": "Maximum SOC",
+          "reserve_soc_pct": "Reserve SOC (backup mode)",
+          "max_charge_w": "Max battery charge power",
+          "max_discharge_w": "Max battery discharge power",
+          "charge_efficiency": "Charge efficiency",
+          "discharge_efficiency": "Discharge efficiency",
+          "degradation_eur_kwh": "Battery degradation cost",
+          "horizon_hours": "Optimization horizon",
+          "step_minutes": "Optimization step",
+          "optimize_interval_min": "Recompute interval",
+          "export_price_eur_kwh": "Export/remuneration price"
+        },
+        "data_description": {
+          "enable_control": "Required before selecting auto/economic/solar_priority/backup. Kept off after restarts.",
+          "reserve_soc_pct": "Must be above minimum SOC"
+        }
+      }
+    },
+    "error": {
+      "soc_range": "Minimum SOC must be below maximum SOC",
+      "reserve_below_min": "Reserve SOC must be above the minimum SOC"
+    }
+  },
+  "selector": {
+    "mode": {
+      "options": {
+        "shadow": "Shadow (compute only)",
+        "manual": "Manual",
+        "safe": "Safe",
+        "solar_priority": "Solar priority",
+        "economic": "Economic",
+        "backup": "Backup",
+        "auto": "Auto (executes)"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "optimization_status": { "name": "Optimization status" },
+      "current_strategy": { "name": "Current strategy" },
+      "grid_power": { "name": "Grid power" },
+      "pv_power": { "name": "PV power" },
+      "battery_power": { "name": "Battery power" },
+      "battery_soc": { "name": "Battery SOC" }
+    },
+    "select": {
+      "mode": {
+        "name": "Mode",
+        "state": {
+          "shadow": "Shadow",
+          "manual": "Manual",
+          "safe": "Safe",
+          "solar_priority": "Solar priority",
+          "economic": "Economic",
+          "backup": "Backup",
+          "auto": "Auto"
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "control_not_enabled": {
+      "message": "Real control is disabled. Enable it in the integration options before selecting an executing mode."
+    }
+  },
+  "services": {
+    "reoptimize": {
+      "name": "Reoptimize",
+      "description": "Forces an immediate refresh of the DSEM energy snapshot and plan."
+    }
+  }
+}

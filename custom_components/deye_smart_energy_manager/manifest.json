@@ -1,0 +1,13 @@
+{
+  "domain": "deye_smart_energy_manager",
+  "name": "Deye Smart Energy Manager",
+  "codeowners": ["@fjporras"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/fjporras/deye-smart-energy-manager",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/fjporras/deye-smart-energy-manager/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

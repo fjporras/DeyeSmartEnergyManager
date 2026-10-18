@@ -333,7 +333,13 @@ Para DSEM (LP horario 24-48 h) la precisión de Forecast.Solar es suficiente; el
 - `modules_power` (Wp del campo FV)
 - damping (opcional, sombras mañana/tarde)
 
-> Pendiente: que el usuario la instale en HA (config flow, ~2 min) o autorizar su alta vía `ha_set_integration` — no se ha tocado la configuración de producción.
+> **INSTALADA (2026-10-18, verificado por MCP).** Entidades disponibles:
+> `sensor.energy_production_today` (14,4 kWh hoy), `sensor.energy_production_today_remaining`,
+> `sensor.energy_production_tomorrow` (15,1 kWh), `sensor.energy_current_hour`,
+> `sensor.energy_next_hour`, `sensor.power_production_now` (W),
+> `sensor.power_highest_peak_time_today`, `sensor.power_highest_peak_time_tomorrow`.
+> Limitación: no expone la curva horaria completa → DSEM sintetizará el perfil
+> horario (histórico + totales diarios) hasta que exista una fuente horaria.
 
 ---
 

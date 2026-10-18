@@ -1,0 +1,5 @@
+reoptimize:
+  name: Reoptimize
+  description: >-
+    Forces an immediate refresh of the DSEM energy snapshot and, when the
+    optimizer is enabled, recalculates the 24-48 h energy plan.

@@ -1,0 +1,118 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Entidades de medida",
+        "description": "Selecciona las entidades de Home Assistant que leerá DSEM. Los valores por defecto corresponden a la instalación auditada de GTS Solutions.",
+        "data": {
+          "pv_power_entity": "Potencia de producción FV (Fronius por puerto GEN del Deye)",
+          "grid_power_entity": "Potencia de intercambio con red (CTs externos, + importación)",
+          "load_power_entity": "Potencia de consumo de la vivienda (puerto load del Deye)",
+          "battery_soc_entity": "Estado de carga de la batería (SOC)",
+          "battery_power_entity": "Potencia de batería (− carga / + descarga)",
+          "price_import_entity": "Sensor de precio de compra (PVPC)"
+        },
+        "data_description": {
+          "pv_power_entity": "W o kW; p. ej. el sensor microinverter de solarman",
+          "grid_power_entity": "W o kW; positivo al importar",
+          "load_power_entity": "W o kW",
+          "battery_soc_entity": "Sensor en %",
+          "battery_power_entity": "W o kW; negativo al cargar",
+          "price_import_entity": "Sensor con atributos horarios price_XXh"
+        }
+      },
+      "optional": {
+        "title": "Entidades opcionales",
+        "description": "Deja vacío para desactivar la función correspondiente. VE y termo permanecen inactivos hasta que existan entidades reales.",
+        "data": {
+          "pv_forecast_entity": "Previsión FV — energía de hoy",
+          "pv_forecast_tomorrow_entity": "Previsión FV — energía de mañana",
+          "energy_import_entity": "Contador de energía importada",
+          "energy_export_entity": "Contador de energía exportada"
+        }
+      }
+    },
+    "error": {
+      "entity_missing": "La entidad no existe",
+      "entity_unavailable": "La entidad no está disponible o es desconocida",
+      "invalid_unit": "La entidad tiene una unidad incompatible"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opciones de DSEM",
+        "description": "Límites de batería, parámetros del optimizador y puerta de control. SHADOW es el único modo seguro hasta habilitar el control explícitamente.",
+        "data": {
+          "mode": "Modo de funcionamiento",
+          "enable_control": "Habilitar control real (escribe en entidades del inversor)",
+          "battery_usable_kwh": "Capacidad útil de batería",
+          "soc_min_pct": "SOC mínimo",
+          "soc_max_pct": "SOC máximo",
+          "reserve_soc_pct": "SOC de reserva (modo backup)",
+          "max_charge_w": "Potencia máxima de carga",
+          "max_discharge_w": "Potencia máxima de descarga",
+          "charge_efficiency": "Eficiencia de carga",
+          "discharge_efficiency": "Eficiencia de descarga",
+          "degradation_eur_kwh": "Coste de degradación de batería",
+          "horizon_hours": "Horizonte de optimización",
+          "step_minutes": "Paso de optimización",
+          "optimize_interval_min": "Intervalo de recálculo",
+          "export_price_eur_kwh": "Precio de exportación/compensación"
+        }
+      }
+    },
+    "error": {
+      "soc_range": "El SOC mínimo debe ser inferior al SOC máximo",
+      "reserve_below_min": "El SOC de reserva debe ser superior al SOC mínimo"
+    }
+  },
+  "selector": {
+    "mode": {
+      "options": {
+        "shadow": "Shadow (solo calcula)",
+        "manual": "Manual",
+        "safe": "Seguro",
+        "solar_priority": "Prioridad solar",
+        "economic": "Económico",
+        "backup": "Reserva",
+        "auto": "Auto (ejecuta)"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "optimization_status": { "name": "Estado del optimizador" },
+      "current_strategy": { "name": "Estrategia actual" },
+      "grid_power": { "name": "Potencia de red" },
+      "pv_power": { "name": "Potencia FV" },
+      "battery_power": { "name": "Potencia de batería" },
+      "battery_soc": { "name": "SOC de batería" }
+    },
+    "select": {
+      "mode": {
+        "name": "Modo",
+        "state": {
+          "shadow": "Shadow",
+          "manual": "Manual",
+          "safe": "Seguro",
+          "solar_priority": "Prioridad solar",
+          "economic": "Económico",
+          "backup": "Reserva",
+          "auto": "Auto"
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "control_not_enabled": {
+      "message": "El control real está deshabilitado. Actívalo en las opciones de la integración antes de elegir un modo ejecutor."
+    }
+  },
+  "services": {
+    "reoptimize": {
+      "name": "Reoptimizar",
+      "description": "Fuerza una actualización inmediata del snapshot energético y del plan de DSEM."
+    }
+  }
+}
