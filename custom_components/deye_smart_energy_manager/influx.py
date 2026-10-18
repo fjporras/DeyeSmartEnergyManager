@@ -173,11 +173,39 @@ def _sync_query_prices(
                         continue
             return out
 
+        def peek(measurement, kind):
+            """Last raw points of a measurement — diagnostic sample."""
+            try:
+                tables = query_api.query(
+                    f'from(bucket: "{_esc(settings.bucket)}")'
+                    f" |> range(start: {start.isoformat()})"
+                    f' |> filter(fn: (r) => '
+                    f'r._measurement == "{_esc(measurement)}")'
+                    " |> last()"
+                )
+                sample = [
+                    f"{r.get_time()}|{r.get_field()}={r.get_value()}"
+                    for t in tables
+                    for r in t.records
+                ][:8]
+                meta[f"influx_{kind}_sample"] = (
+                    ";".join(sample) or "empty"
+                )
+            except Exception as err:  # noqa: BLE001
+                meta[f"influx_{kind}_sample"] = f"err:{err!r}"[:150]
+
         meta["influx_api_version"] = settings.api_version or "?"
         meta["influx_bucket"] = settings.bucket
         meta["influx_org"] = settings.org
         meta["influx_entry_keys"] = ",".join(settings.entry_keys)
-        return points(import_m, import_f), points(export_m, export_f), meta
+
+        imp_pts = points(import_m, import_f)
+        exp_pts = points(export_m, export_f)
+        if not imp_pts and import_m:
+            peek(import_m, "import")
+        if not exp_pts and export_m:
+            peek(export_m, "export")
+        return imp_pts, exp_pts, meta
     finally:
         client.close()
 
