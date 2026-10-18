@@ -68,27 +68,29 @@
 ## 4. Topología eléctrica deducida (VERIFICADA con datos)
 
 ```
-RED ELÉCTRICA ─────────────┬───────────────────────────────────────┐
-                           │                                       │
-                    [Fronius Smart Meter]                   CTs del Deye
-                    rama ~2,2 kW constante          (grid port + CTs externos,
-                    (monofásicas asimétricas)        ~equilibrado trifásico)
-                           │                                       │
-                    Cargas "directas"                      ┌────────┴────────┐
-                    (~2-2,7 kW típico)                     │  DEYE 15K 3ph   │
-                                                           │ GRID ── LOAD*   │
-                                                           │ GEN ◄── FRONIUS │  ← Symo 8.2-3-M
-                                                           │  (Microinverter)│    AC-coupled
-                                                           │ BAT ── SEPLOS   │  ~32 kWh nom.
-                                                           │ MPPT1/MPPT2 = 0 │  sin strings DC
-                                                           └─────────────────┘
+RED ELÉCTRICA / CONTADOR FISCAL
+              │
+        [CTs externos del Deye]  ← PUNTO DE MEDIDA AUTORITATIVO (decisión del
+              │                    usuario: pinzas a la entrada de Grid)
+              │
+        ┌─────┴────────┐
+        │  DEYE 15K    │   CTs internos ≈ externos (~8,5 kW) → el Deye ve el
+        │ GRID ── LOAD │   intercambio TOTAL con la red de la instalación.
+        │ GEN ◄─ FRONIUS│   Fronius Symo 8.2-3-M AC-coupled (io_mode=Microinverter)
+        │ BAT ─ SEPLOS │   ~32 kWh nominales
+        │ MPPT1/2 = 0  │   sin strings DC
+        └─────┬────────┘
+              │
+        TODAS las cargas de la vivienda (incluye la rama ~2,2 kW que mide el
+        Fronius Smart Meter como submedida — ver §5.3; el meter NO se usa
+        en el modelo por decisión del usuario)
 ```
 
 **Evidencia:**
 
 1. **Fronius en puerto GEN (acoplamiento AC):** `select.deye_…_io_mode` = `Microinverter`; `microinverter_power` = 3220 W ≈ `froniussymo alimentacion_ca` = 3305 W; `microinverter_energy` == `total_production` del Deye (idénticos en estadística diaria); `pv1_power`/`pv2_power` = 0 siempre; PV1/PV2 voltage ≈ 0-2 V → **sin strings DC en el Deye**.
-2. **El Smart Meter NO cubre la rama del Deye:** con batería descargando 2,3-2,9 kW y `grid_power`≈0 (23-01h), el meter sigue ~2,2 kW; con `grid_power`=8,9 kW (20h), el meter sigue ~2,3 kW. Además su reparto por fases (608/16/1690 W) es asimétrico frente al trifásico simétrico del Deye.
-3. **Autodeclarado:** `froniussmart_meter_63a_descripcion_de_la_ubicacion_del_contador` = `feed_in`, pero los datos demuestran que no mide el feed-in completo — mide una **rama de cargas directas** no respaldadas por el Deye (o el Deye conecta aguas arriba del meter). ⚠️ **Verificación física pendiente** (posición real de pinzas/CTs y relación con el contador fiscal de la distribuidora).
+2. **El Smart Meter mide una subrama (~2,2 kW):** con batería descargando 2,3-2,9 kW y `grid_power`≈0 (23-01h), el meter sigue ~2,2 kW (la batería cubre las cargas del puerto LOAD, incluida esa rama); con `grid_power`=8,9 kW (20h), el meter sigue ~2,3 kW. Su reparto por fases (608/16/1690 W) es asimétrico frente al trifásico simétrico del Deye. **Decisión del usuario (2026-10-18): los CTs externos del Deye, instalados a la entrada de Grid, son el punto de medida oficial; el Smart Meter queda excluido del modelo.**
+3. **Coherencia CTs:** `external_power` (CTs externos en la entrada de red) ≈ `internal_power` (puerto grid, 8532 vs 8548 W) → prácticamente todo el consumo de la vivienda transita por el Deye. `descripcion_ubicacion` del meter dice `feed_in` pero actúa como submedida de una rama; se ignora para DSEM.
 4. **Balance instantáneo del subsistema Deye (17:36):** entrada = grid 8548 W + microinv 3220 W; salida = load 9053 W (UPS) + batería cargando 2532 W + pérdidas 171 W → ≈ 11770 ≈ 11756 W. **Cierra** (<0,2% error).
 5. **Signos:** `battery_power` **negativo = cargando**, positivo = descargando (verificado con `battery_state` y descarga nocturna). `grid_power` positivo = import (estadísticas horarias muestran valores ~0/-104 W durante descarga; `today_energy_export` solo 0,2 kWh/día → el inversor opera en *Zero Export To CT* casi sin exportar).
 6. **Contadores diarios (sum estadísticas, kWh):** Deye import ~25-47/día; Deye load ~55-91/día; meter consumida ~53-88 kWh/día; FV ~33-49 kWh/día; batería carga ~7-11, descarga ~3-18 kWh/día.
@@ -200,8 +202,8 @@ Prefijo común Deye: `*.deye_sun_15k_sg05lp3_eu_sm2_*` (algunas con prefijo de �
 | `sensor.froniussymo_8_2_3_m_1_energia_al_dia` / `_ano` / `_total` | 28103 Wh | Wh | Energía FV |
 | `sensor.froniussymo_8_2_3_m_1_corriente_alterna/continua`, `_tension_de_cc`, `cuarto_…_corriente_alterna` | — | A/V | Diagnóstico |
 | `sensor.froniussymo_8_2_3_m_1_mensaje_de_estado` / `_error` | running / no_error | enum | Estado/errores |
-| `sensor.froniussmart_meter_63a_potencia_real` (+fase 1/2/3) | 2317 (608/16/1690) | W | **Potencia rama no-Deye** |
-| `sensor.froniussmart_meter_63a_energia_real_consumida` / `_producida` | 72,7 / 33,96 MWh | Wh | Contadores rama |
+| `sensor.froniussmart_meter_63a_potencia_real` (+fase 1/2/3) | 2317 (608/16/1690) | W | Submedida de una rama — **excluida del modelo por decisión del usuario** |
+| `sensor.froniussmart_meter_63a_energia_real_consumida` / `_producida` | 72,7 / 33,96 MWh | Wh | Contadores rama — excluidos |
 | `sensor.froniussmart_meter_63a_factor_de_potencia`, `_promedio_de_frecuencia_de_fase` | 0,94 | —/Hz | Calidad |
 | `sensor.froniussmart_meter_63a_ubicacion_del_medidor` / `_descripcion…` | 0 / feed_in | enum | Ubicación declarada |
 | `sensor.froniussolarnet_importacion/exportacion_de_la_red_electrica` | 2319/0 | W | Vista SolarNet del meter |
@@ -259,8 +261,8 @@ Sin dominios `water_heater`, `climate`, ni sensores dedicados. El pico vespertin
 |---|---|---|---|
 | 1 | **VE inexistente** | Función VE deshabilitada | Diseño opcional; integrar cargador/VE antes de activar |
 | 2 | **Termo/ACS inexistente** | Función ACS deshabilitada | Igual; evaluar medidor dedicado |
-| 3 | **Cobertura del Smart Meter ambigua** | El meter no cubre la rama Deye; la facturación real depende del contador fiscal (no visible). Modelo de balance debe usar CTs del Deye + meter por separado | Verificación física de pinzas y del esquema unifilar; validar contra factura |
-| 4 | **Sin previsión solar dedicada** | Precisión limitada | Usar met.no (cloud/uv) + histórico; recomendar Solcast o Forecast.Solar (HACS) |
+| 3 | ~~Cobertura del Smart Meter ambigua~~ | **RESUELTO (2026-10-18):** los CTs externos del Deye están a la entrada de Grid y son el punto de medida oficial; el Smart Meter se excluye del modelo | Validar `external_power`/`grid_power` contra el contador fiscal/factura en la primera semana de SHADOW |
+| 4 | **Sin previsión solar dedicada** | Precisión limitada | **Decisión: instalar `forecast_solar` (integración core) — ver §9.** met.no queda como respaldo meteorológico |
 | 5 | **Historia cruda ~10 días; estadísticas ~2,5 meses** | Perfiles estacionales débiles | Acumular estadísticas; valorar InfluxDB si tiene histórico largo (acceso no verificable por MCP) |
 | 6 | **Capacidad útil batería incierta** | Nominal config 628 Ah; BMS "Corrected Capacity" 439 Ah; estimador solarman 36,1 kWh | Validar empíricamente; hacerlo parámetro configurable |
 | 7 | **Automatización PVPC de carga ya controla `battery_grid_charging`** | Conflicto de actuadores en AUTO | Coordinar/desactivar en fase de activación (con autorización) |
@@ -275,12 +277,11 @@ Sin dominios `water_heater`, `climate`, ni sensores dedicados. El pico vespertin
 ## 7. Modelo energético propuesto (a partir de entidades reales)
 
 - **PV(t)** = `garaje_…_microinverter_power` (≈ Fronius AC; validar contra `froniussymo alimentacion_ca`). PV DC del Deye = 0.
-- **GridDeye(t)** = `…_external_power` (CTs externos; alternativa `grid_power`/`internal_power`) — conv. + import.
-- **GridBranch(t)** = `froniussmart_meter_63a_potencia_real` — rama no respaldada (fuera del balance del Deye; sumar al consumo total de la vivienda).
-- **Load(t)** = `…_load_ups_power` (o `load_power`) — consumo del puerto backup.
+- **Grid(t)** = `…_external_power` (CTs externos en la entrada de Grid — punto de medida oficial; alternativa `grid_power`/`internal_power`). Convención + = importación.
+- **Load(t)** = `…_load_ups_power` (o `load_power`) — consumo total vivienda (incluye la rama del Smart Meter).
 - **Bat(t)** = `…_battery_power` (− carga, + descarga); SOC = `…_battery`.
-- **Balance Deye:** `PV + GridDeye + Bat_dis ≈ Load + Bat_chg + Losses` — verificado ≈0,2 % error.
-- **Consumo vivienda total** = Load + consumo rama meter (`froniussolarnet_carga_de_energia_consumida`), pendiente confirmar que no haya solape.
+- **Balance:** `PV + Grid + Bat_dis ≈ Load + Bat_chg + Losses` — verificado ≈0,2 % error.
+- **Consumo vivienda total** = Load(t) directamente (los CTs ya ven todo el intercambio con red).
 - **Energía:** contadores `total/today_*` (`total_increasing`) + estadísticas largo plazo para perfiles.
 - **Precio compra:** `sensor.esios_pvpc` (+attrs `price_XXh`). **Precio exportación:** parámetro configurable.
 - **Control futuro (solo AUTO, tras habilitación explícita):** TOU — `time_of_use`, `program_N_time/power/soc/charging`, `battery_grid_charging`, `battery_grid_charging_current`, `battery_max_charging/discharging_current`, `grid_max_import/export_power`, `work_mode`, `energy_pattern`.
@@ -309,6 +310,30 @@ deye_smart_energy_manager/
 - Sin dependencias de comunicación propias: lee entidades HA y escribe solo en entidades solarman estándar.
 - Optimizador LP horario 24-48 h; recálculo por tiempo + triggers (cambio PVPC, SOC anómalo, dispositivo offline).
 - Sin acceso a `/config` desde MCP: desarrollo en este repo; despliegue manual documentado en `DEPLOYMENT.md`.
+
+---
+
+## 9. Previsión solar — decisión
+
+**Elegida: `forecast_solar` (integración core de Home Assistant, "Forecast.Solar").**
+
+| Criterio | Forecast.Solar (core) | Solcast (HACS, oziee) |
+|---|---|---|
+| Instalación | Integración oficial — Ajustes → Dispositivos → Añadir → "Forecast.Solar" | Requiere HACS + clave API gratuita de solcast.com.au |
+| Coste | Gratis sin API key (~12 llamadas/día suficiente; API key personal opcional gratis) | Gratis (hobbyist, ~10 llamadas/día, 2 tejados) |
+| Datos | Wh instantáneos y kWh por hora/día (hoy, mañana, restantes) | Idénticos + intervalos de confianza P10/P50/P90 |
+| Precisión | Buena (modelo físico, ~met.no/DWD) | Algo mejor (satélite nowcasting) |
+| Riesgo | Mínimo | Dependencia de HACS + token |
+
+Para DSEM (LP horario 24-48 h) la precisión de Forecast.Solar es suficiente; el optimizador incorporará incertidumbre de todos modos. Solcast queda como mejora futura si el error de previsión resulta significativo.
+
+**Parámetros necesarios para configurarla** (del tejado que alimenta el Fronius — el Deye no tiene strings):
+- `azimuth` (0=N, 90=E, 180=S, 270=O)
+- `declination` (inclinación en °)
+- `modules_power` (Wp del campo FV)
+- damping (opcional, sombras mañana/tarde)
+
+> Pendiente: que el usuario la instale en HA (config flow, ~2 min) o autorizar su alta vía `ha_set_integration` — no se ha tocado la configuración de producción.
 
 ---
 
