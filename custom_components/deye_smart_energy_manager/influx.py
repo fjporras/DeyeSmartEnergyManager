@@ -111,10 +111,16 @@ def _sync_query_prices(
         import_m, import_f = settings.import_measurement, settings.import_field
         export_m, export_f = settings.export_measurement, settings.export_field
         if not all((import_m, import_f, export_m, export_f)):
-            import_m, import_f, export_m, export_f = _discover(
-                query_api, settings.bucket, import_m, import_f,
-                export_m, export_f,
+            import_m, import_f, export_m, export_f, discovered = (
+                _discover(
+                    query_api, settings.bucket, import_m, import_f,
+                    export_m, export_f,
+                )
             )
+            if discovered:
+                meta["influx_measurements"] = ",".join(
+                    str(m) for m in discovered[:30]
+                )
         meta["import_series"] = (
             f"{import_m}.{import_f}" if import_m else "not_found"
         )
@@ -148,7 +154,9 @@ def _sync_query_prices(
 
 
 def _discover(query_api, bucket, import_m, import_f, export_m, export_f):
-    """Auto-discover measurement/field pairs via influxdb/schema."""
+    """Auto-discover measurement/field pairs via influxdb/schema.
+
+    Returns (import_m, import_f, export_m, export_f, measurements)."""
     try:
         tables = query_api.query(
             'import "influxdata/influxdb/schema"'
@@ -190,7 +198,7 @@ def _discover(query_api, bucket, import_m, import_f, export_m, export_f):
 
     import_m, import_f = pick(import_m, import_f, _IMPORT_RE)
     export_m, export_f = pick(export_m, export_f, _EXPORT_RE)
-    return import_m, import_f, export_m, export_f
+    return import_m, import_f, export_m, export_f, measurements
 
 
 async def async_query_hourly_prices(
