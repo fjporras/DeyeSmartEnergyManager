@@ -23,6 +23,7 @@ from .const import (
     CONF_EXPORT_PRICE_EUR_KWH,
     CONF_GRID_POWER_ENTITY,
     CONF_HORIZON_HOURS,
+    CONF_INFLUX_BUCKET,
     CONF_INFLUX_EXPORT_FIELD,
     CONF_INFLUX_EXPORT_MEASUREMENT,
     CONF_INFLUX_IMPORT_FIELD,
@@ -54,6 +55,7 @@ from .const import (
     DEFAULT_EXPORT_PRICE_EUR_KWH,
     DEFAULT_GRID_POWER_ENTITY,
     DEFAULT_HORIZON_HOURS,
+    DEFAULT_INFLUX_BUCKET,
     DEFAULT_INFLUX_EXPORT_MEASUREMENT,
     DEFAULT_INFLUX_IMPORT_MEASUREMENT,
     DEFAULT_LOAD_POWER_ENTITY,
@@ -396,6 +398,9 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                             CONF_INFLUX_PRICES_ENABLED
                         ): selector.BooleanSelector(),
                         vol.Optional(
+                            CONF_INFLUX_BUCKET
+                        ): selector.TextSelector(),
+                        vol.Optional(
                             CONF_INFLUX_IMPORT_MEASUREMENT
                         ): selector.TextSelector(),
                         vol.Optional(
@@ -449,6 +454,9 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                     ),
                     CONF_INFLUX_PRICES_ENABLED: options.get(
                         CONF_INFLUX_PRICES_ENABLED, True
+                    ),
+                    CONF_INFLUX_BUCKET: options.get(
+                        CONF_INFLUX_BUCKET, DEFAULT_INFLUX_BUCKET
                     ),
                     CONF_INFLUX_IMPORT_MEASUREMENT: options.get(
                         CONF_INFLUX_IMPORT_MEASUREMENT,

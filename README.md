@@ -4,8 +4,7 @@ Integración personalizada de Home Assistant para optimización económica de un
 vivienda con fotovoltaica (Fronius Symo AC-coupled), inversor híbrido Deye
 SUN-15K-SG05LP3-EU-SM2 y batería SEPLOS (~32 kWh nominales).
 
-**Instancia objetivo:** GTS Solutions — `http://10.0.100.20:8123` (HA Container
-core-2026.8.3, Europe/Madrid).
+**Instancia objetivo:** HA Container core-2026.8.3, Europe/Madrid).
 
 ## Estado del proyecto
 

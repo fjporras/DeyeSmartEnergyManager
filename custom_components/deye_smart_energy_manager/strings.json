@@ -70,6 +70,7 @@
           "optimize_interval_min": "Recompute interval",
           "export_price_eur_kwh": "Export/remuneration price",
           "influx_prices_enabled": "Use InfluxDB hourly prices",
+          "influx_bucket": "InfluxDB price bucket",
           "influx_import_measurement": "InfluxDB import-price measurement",
           "influx_import_field": "InfluxDB import-price field",
           "influx_export_measurement": "InfluxDB export-price measurement",
@@ -78,7 +79,8 @@
         "data_description": {
           "enable_control": "Required before selecting auto/economic/solar_priority/backup. Kept off after restarts.",
           "reserve_soc_pct": "Must be above minimum SOC",
-          "influx_prices_enabled": "Reads hourly prices from the influxdb config entry bucket (REE indicators). Falls back to PVPC when unavailable.",
+          "influx_prices_enabled": "Reads hourly prices from an InfluxDB bucket (REE indicators). Reuses the URL/token/org of HA's influxdb entry. Falls back to PVPC when unavailable.",
+          "influx_bucket": "Bucket where the external instance writes REE prices. Independent from the bucket HA exports its states to.",
           "influx_import_measurement": "Leave empty for auto-discovery",
           "influx_import_field": "Leave empty for auto-discovery",
           "influx_export_measurement": "Leave empty for auto-discovery",

@@ -20,10 +20,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from .const import (
+    CONF_INFLUX_BUCKET,
     CONF_INFLUX_EXPORT_FIELD,
     CONF_INFLUX_EXPORT_MEASUREMENT,
     CONF_INFLUX_IMPORT_FIELD,
     CONF_INFLUX_IMPORT_MEASUREMENT,
+    DEFAULT_INFLUX_BUCKET,
     DEFAULT_INFLUX_EXPORT_MEASUREMENT,
     DEFAULT_INFLUX_IMPORT_MEASUREMENT,
 )
@@ -82,7 +84,14 @@ def get_influx_settings(hass, options: dict) -> InfluxSettings | None:
             or base.get("org_name")
             or ""
         ),
-        bucket=base.get("bucket") or base.get("bucket_name") or "",
+        # Read bucket is independent from the export bucket configured
+        # in HA's influxdb entry (that one only receives HA state writes).
+        bucket=(
+            options.get(CONF_INFLUX_BUCKET)
+            or base.get("bucket")
+            or base.get("bucket_name")
+            or DEFAULT_INFLUX_BUCKET
+        ),
         api_version=str(base.get("api_version") or ""),
         entry_keys=tuple(sorted(base.keys())),
         verify_ssl=bool(base.get("verify_ssl", True)),
