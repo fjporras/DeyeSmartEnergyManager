@@ -18,6 +18,10 @@ async def async_get_config_entry_diagnostics(
     """
     coordinator = entry.runtime_data
     snapshot = coordinator.data
+    plan = coordinator.plan
+    plan_dict = asdict(plan) if plan else None
+    if plan_dict:
+        plan_dict["slots"] = plan_dict["slots"][:24]
     return {
         "entry": {
             "title": entry.title,
@@ -27,4 +31,6 @@ async def async_get_config_entry_diagnostics(
         "mode": coordinator.mode,
         "control_enabled": coordinator.control_enabled,
         "snapshot": asdict(snapshot) if snapshot else None,
+        "plan": plan_dict,
+        "plan_meta": dict(coordinator.plan_meta),
     }

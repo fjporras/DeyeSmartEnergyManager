@@ -17,6 +17,8 @@ CONF_BATTERY_POWER_ENTITY = "battery_power_entity"
 CONF_PRICE_IMPORT_ENTITY = "price_import_entity"
 CONF_PV_FORECAST_ENTITY = "pv_forecast_entity"
 CONF_PV_FORECAST_TOMORROW_ENTITY = "pv_forecast_tomorrow_entity"
+CONF_PV_PEAK_TODAY_ENTITY = "pv_peak_today_entity"
+CONF_PV_PEAK_TOMORROW_ENTITY = "pv_peak_tomorrow_entity"
 CONF_ENERGY_IMPORT_ENTITY = "energy_import_entity"
 CONF_ENERGY_EXPORT_ENTITY = "energy_export_entity"
 
@@ -80,6 +82,8 @@ DEFAULT_BATTERY_POWER_ENTITY = "sensor.deye_sun_15k_sg05lp3_eu_sm2_battery_power
 DEFAULT_PRICE_IMPORT_ENTITY = "sensor.esios_pvpc"
 DEFAULT_PV_FORECAST_ENTITY = "sensor.energy_production_today"
 DEFAULT_PV_FORECAST_TOMORROW_ENTITY = "sensor.energy_production_tomorrow"
+DEFAULT_PV_PEAK_TODAY_ENTITY = "sensor.power_highest_peak_time_today"
+DEFAULT_PV_PEAK_TOMORROW_ENTITY = "sensor.power_highest_peak_time_tomorrow"
 DEFAULT_ENERGY_IMPORT_ENTITY = (
     "sensor.deye_sun_15k_sg05lp3_eu_sm2_total_energy_import"
 )

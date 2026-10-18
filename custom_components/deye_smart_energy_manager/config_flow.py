@@ -31,6 +31,8 @@ from .const import (
     CONF_PRICE_IMPORT_ENTITY,
     CONF_PV_FORECAST_ENTITY,
     CONF_PV_FORECAST_TOMORROW_ENTITY,
+    CONF_PV_PEAK_TODAY_ENTITY,
+    CONF_PV_PEAK_TOMORROW_ENTITY,
     CONF_PV_POWER_ENTITY,
     CONF_RESERVE_SOC_PCT,
     CONF_SOC_MAX_PCT,
@@ -55,6 +57,8 @@ from .const import (
     DEFAULT_PRICE_IMPORT_ENTITY,
     DEFAULT_PV_FORECAST_ENTITY,
     DEFAULT_PV_FORECAST_TOMORROW_ENTITY,
+    DEFAULT_PV_PEAK_TODAY_ENTITY,
+    DEFAULT_PV_PEAK_TOMORROW_ENTITY,
     DEFAULT_PV_POWER_ENTITY,
     DEFAULT_RESERVE_SOC_PCT,
     DEFAULT_SOC_MAX_PCT,
@@ -169,6 +173,8 @@ class DsemConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             checks = {
                 CONF_PV_FORECAST_ENTITY: _ENERGY_UNITS,
                 CONF_PV_FORECAST_TOMORROW_ENTITY: _ENERGY_UNITS,
+                CONF_PV_PEAK_TODAY_ENTITY: set(),
+                CONF_PV_PEAK_TOMORROW_ENTITY: set(),
                 CONF_ENERGY_IMPORT_ENTITY: _ENERGY_UNITS,
                 CONF_ENERGY_EXPORT_ENTITY: _ENERGY_UNITS,
             }
@@ -196,6 +202,16 @@ class DsemConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         ): selector.EntitySelector(
                             selector.EntitySelectorConfig(domain="sensor")
                         ),
+                        vol.Optional(
+                            CONF_PV_PEAK_TODAY_ENTITY
+                        ): selector.EntitySelector(
+                            selector.EntitySelectorConfig(domain="sensor")
+                        ),
+                        vol.Optional(
+                            CONF_PV_PEAK_TOMORROW_ENTITY
+                        ): selector.EntitySelector(
+                            selector.EntitySelectorConfig(domain="sensor")
+                        ),
                         vol.Optional(CONF_ENERGY_IMPORT_ENTITY): selector.EntitySelector(
                             selector.EntitySelectorConfig(domain="sensor")
                         ),
@@ -207,6 +223,8 @@ class DsemConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     CONF_PV_FORECAST_ENTITY: DEFAULT_PV_FORECAST_ENTITY,
                     CONF_PV_FORECAST_TOMORROW_ENTITY: DEFAULT_PV_FORECAST_TOMORROW_ENTITY,
+                    CONF_PV_PEAK_TODAY_ENTITY: DEFAULT_PV_PEAK_TODAY_ENTITY,
+                    CONF_PV_PEAK_TOMORROW_ENTITY: DEFAULT_PV_PEAK_TOMORROW_ENTITY,
                     CONF_ENERGY_IMPORT_ENTITY: DEFAULT_ENERGY_IMPORT_ENTITY,
                     CONF_ENERGY_EXPORT_ENTITY: DEFAULT_ENERGY_EXPORT_ENTITY,
                 },

@@ -27,6 +27,8 @@
         "data": {
           "pv_forecast_entity": "Previsión FV — energía de hoy",
           "pv_forecast_tomorrow_entity": "Previsión FV — energía de mañana",
+          "pv_peak_today_entity": "Previsión FV — hora del pico de hoy",
+          "pv_peak_tomorrow_entity": "Previsión FV — hora del pico de mañana",
           "energy_import_entity": "Contador de energía importada",
           "energy_export_entity": "Contador de energía exportada"
         }
@@ -84,6 +86,18 @@
     "sensor": {
       "optimization_status": { "name": "Estado del optimizador" },
       "current_strategy": { "name": "Estrategia actual" },
+      "plan_next_action": {
+        "name": "Próxima acción del plan",
+        "state": {
+          "charge_pv": "Cargando desde FV",
+          "charge_grid": "Cargando desde red",
+          "discharge": "Descargando",
+          "import": "Importando (batería retenida)",
+          "export": "Exportando",
+          "idle": "En espera",
+          "hold": "Reservando batería"
+        }
+      },
       "grid_power": { "name": "Potencia de red" },
       "pv_power": { "name": "Potencia FV" },
       "battery_power": { "name": "Potencia de batería" },

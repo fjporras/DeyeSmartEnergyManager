@@ -49,3 +49,54 @@ class EnergySnapshot:
         if self.battery_power_w is None:
             return None
         return max(0.0, self.battery_power_w)
+
+
+# ---------------------------------------------------------------------------
+# Energy plan (optimizer output)
+# ---------------------------------------------------------------------------
+
+# Plan actions (machine-readable; translated in strings.json)
+ACTION_CHARGE_PV = "charge_pv"        # store PV surplus
+ACTION_CHARGE_GRID = "charge_grid"    # buy cheap energy for later
+ACTION_DISCHARGE = "discharge"        # battery covers an expensive deficit
+ACTION_IMPORT = "import"              # deficit covered by grid (battery held)
+ACTION_EXPORT = "export"              # PV surplus exported (battery full/held)
+ACTION_IDLE = "idle"                  # balanced / no decision needed
+ACTION_HOLD = "hold"                  # explicit reserve protection
+
+
+@dataclass(frozen=True)
+class PlanSlot:
+    """One hourly decision of the energy plan."""
+
+    start: datetime
+    action: str
+    battery_power_w: float            # signed: - charge / + discharge
+    grid_power_w: float               # expected exchange: + import / - export
+    soc_end_pct: float
+    import_price_eur_kwh: float | None
+    reason: str                       # short explainable justification
+
+
+@dataclass(frozen=True)
+class EnergyPlan:
+    """Hourly plan produced by the optimizer (computed in every mode)."""
+
+    generated_at: datetime
+    horizon_hours: int
+    slots: tuple[PlanSlot, ...]
+    expected_cost_eur: float | None   # net cost of the plan (import - export)
+    baseline_cost_eur: float | None   # cost if the battery did nothing
+    warnings: tuple[str, ...] = field(default_factory=tuple)
+
+    @property
+    def current_slot(self) -> PlanSlot | None:
+        """Slot covering the plan start (index 0)."""
+        return self.slots[0] if self.slots else None
+
+    @property
+    def expected_savings_eur(self) -> float | None:
+        """Estimated savings vs doing nothing with the battery."""
+        if self.expected_cost_eur is None or self.baseline_cost_eur is None:
+            return None
+        return self.baseline_cost_eur - self.expected_cost_eur

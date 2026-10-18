@@ -48,6 +48,37 @@ def _status_attrs(
     }
 
 
+def _plan_attrs(
+    snapshot: EnergySnapshot, coordinator: DsemCoordinator
+) -> dict:
+    """Plan summary + compact slot list (explainability surface)."""
+    plan = coordinator.plan
+    if plan is None:
+        return {"plan_available": False}
+    return {
+        "plan_available": True,
+        "generated_at": plan.generated_at.isoformat(),
+        "horizon_hours": plan.horizon_hours,
+        "expected_cost_eur": plan.expected_cost_eur,
+        "baseline_cost_eur": plan.baseline_cost_eur,
+        "expected_savings_eur": plan.expected_savings_eur,
+        "warnings": list(plan.warnings),
+        **coordinator.plan_meta,
+        "slots": [
+            {
+                "t": slot.start.isoformat(),
+                "action": slot.action,
+                "batt_w": slot.battery_power_w,
+                "grid_w": slot.grid_power_w,
+                "soc_end": slot.soc_end_pct,
+                "eur_kwh": slot.import_price_eur_kwh,
+                "why": slot.reason,
+            }
+            for slot in plan.slots[:48]
+        ],
+    }
+
+
 SENSORS: tuple[DsemSensorDescription, ...] = (
     DsemSensorDescription(
         key="optimization_status",
@@ -61,6 +92,17 @@ SENSORS: tuple[DsemSensorDescription, ...] = (
         translation_key="current_strategy",
         icon="mdi:strategy",
         value_fn=lambda s, c: c.mode,
+    ),
+    DsemSensorDescription(
+        key="plan_next_action",
+        translation_key="plan_next_action",
+        icon="mdi:calendar-clock",
+        value_fn=lambda s, c: (
+            c.plan.current_slot.action
+            if c.plan and c.plan.current_slot
+            else None
+        ),
+        attributes_fn=_plan_attrs,
     ),
     DsemSensorDescription(
         key="grid_power",

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from datetime import datetime, timedelta
 
 from homeassistant.config_entries import ConfigEntry
@@ -12,22 +13,53 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_BATTERY_POWER_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
+    CONF_BATTERY_USABLE_KWH,
+    CONF_CHARGE_EFFICIENCY,
+    CONF_DEGRADATION_EUR_KWH,
+    CONF_DISCHARGE_EFFICIENCY,
     CONF_ENABLE_CONTROL,
     CONF_ENERGY_EXPORT_ENTITY,
     CONF_ENERGY_IMPORT_ENTITY,
+    CONF_EXPORT_PRICE_EUR_KWH,
     CONF_GRID_POWER_ENTITY,
+    CONF_HORIZON_HOURS,
     CONF_LOAD_POWER_ENTITY,
+    CONF_MAX_CHARGE_W,
+    CONF_MAX_DISCHARGE_W,
     CONF_MODE,
     CONF_PRICE_IMPORT_ENTITY,
     CONF_PV_FORECAST_ENTITY,
     CONF_PV_FORECAST_TOMORROW_ENTITY,
+    CONF_PV_PEAK_TODAY_ENTITY,
+    CONF_PV_PEAK_TOMORROW_ENTITY,
     CONF_PV_POWER_ENTITY,
+    CONF_RESERVE_SOC_PCT,
+    CONF_SOC_MAX_PCT,
+    CONF_SOC_MIN_PCT,
+    DEFAULT_BATTERY_USABLE_KWH,
+    DEFAULT_CHARGE_EFFICIENCY,
+    DEFAULT_DEGRADATION_EUR_KWH,
+    DEFAULT_DISCHARGE_EFFICIENCY,
+    DEFAULT_EXPORT_PRICE_EUR_KWH,
+    DEFAULT_HORIZON_HOURS,
+    DEFAULT_MAX_CHARGE_W,
+    DEFAULT_MAX_DISCHARGE_W,
     DEFAULT_MODE,
+    DEFAULT_RESERVE_SOC_PCT,
+    DEFAULT_SOC_MAX_PCT,
+    DEFAULT_SOC_MIN_PCT,
     DOMAIN,
     MAX_SNAPSHOT_AGE_S,
     UPDATE_INTERVAL_S,
 )
-from .model import EnergySnapshot
+from .forecast import (
+    async_load_statistics,
+    build_load_series,
+    build_pv_series,
+)
+from .model import EnergyPlan, EnergySnapshot
+from .optimizer import BatteryParams, PlannerInput, optimize
+from .prices import build_price_series
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,6 +94,8 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
             update_interval=timedelta(seconds=UPDATE_INTERVAL_S),
         )
         self._entry = entry
+        self.plan: EnergyPlan | None = None
+        self.plan_meta: dict[str, str] = {}
 
     # -- public properties -------------------------------------------------
 
@@ -114,6 +148,118 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
         ).total_seconds() > MAX_SNAPSHOT_AGE_S:
             stale.append(entity_id)
 
+    def _datetime(self, entity_id: str | None) -> datetime | None:
+        """Read a timestamp/datetime-valued sensor."""
+        if not entity_id:
+            return None
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state.lower() in _UNAVAIL:
+            return None
+        return dt_util.parse_datetime(state.state)
+
+    # -- planning -----------------------------------------------------------
+
+    async def _async_build_plan(
+        self, snapshot: EnergySnapshot
+    ) -> EnergyPlan | None:
+        """Assemble hourly series and run the planner (SHADOW-safe).
+
+        Never raises: a planning failure only degrades the plan, never
+        the snapshot update.
+        """
+        opts = self._entry.options
+        data = self._entry.data
+        now = dt_util.now()  # local tz — PVPC hours are local
+        horizon = int(opts.get(CONF_HORIZON_HOURS, DEFAULT_HORIZON_HOURS))
+        try:
+            price_state = self.hass.states.get(
+                data.get(CONF_PRICE_IMPORT_ENTITY)
+            )
+            price_series = build_price_series(
+                dict(price_state.attributes) if price_state else {},
+                now,
+                horizon,
+            )
+            load_means = await async_load_statistics(
+                self.hass, data.get(CONF_LOAD_POWER_ENTITY)
+            )
+            load = build_load_series(now, horizon, load_means)
+            pv = build_pv_series(
+                now,
+                horizon,
+                snapshot.pv_forecast_today_kwh,
+                snapshot.pv_forecast_tomorrow_kwh,
+                self._datetime(data.get(CONF_PV_PEAK_TODAY_ENTITY)),
+                self._datetime(data.get(CONF_PV_PEAK_TOMORROW_ENTITY)),
+            )
+            soc = snapshot.battery_soc_pct
+            reserve = float(
+                opts.get(CONF_RESERVE_SOC_PCT, DEFAULT_RESERVE_SOC_PCT)
+            )
+            battery = BatteryParams(
+                usable_kwh=float(
+                    opts.get(
+                        CONF_BATTERY_USABLE_KWH, DEFAULT_BATTERY_USABLE_KWH
+                    )
+                ),
+                soc_pct=soc if soc is not None else reserve,
+                soc_min_pct=float(
+                    opts.get(CONF_SOC_MIN_PCT, DEFAULT_SOC_MIN_PCT)
+                ),
+                soc_max_pct=float(
+                    opts.get(CONF_SOC_MAX_PCT, DEFAULT_SOC_MAX_PCT)
+                ),
+                reserve_pct=reserve,
+                max_charge_w=float(
+                    opts.get(CONF_MAX_CHARGE_W, DEFAULT_MAX_CHARGE_W)
+                ),
+                max_discharge_w=float(
+                    opts.get(CONF_MAX_DISCHARGE_W, DEFAULT_MAX_DISCHARGE_W)
+                ),
+                charge_efficiency=float(
+                    opts.get(CONF_CHARGE_EFFICIENCY, DEFAULT_CHARGE_EFFICIENCY)
+                ),
+                discharge_efficiency=float(
+                    opts.get(
+                        CONF_DISCHARGE_EFFICIENCY, DEFAULT_DISCHARGE_EFFICIENCY
+                    )
+                ),
+                degradation_eur_kwh=float(
+                    opts.get(
+                        CONF_DEGRADATION_EUR_KWH, DEFAULT_DEGRADATION_EUR_KWH
+                    )
+                ),
+            )
+            plan = optimize(
+                PlannerInput(
+                    first_hour=price_series.first_hour,
+                    import_prices=price_series.prices,
+                    export_price_eur_kwh=float(
+                        opts.get(
+                            CONF_EXPORT_PRICE_EUR_KWH,
+                            DEFAULT_EXPORT_PRICE_EUR_KWH,
+                        )
+                    ),
+                    pv_kw=pv.kw,
+                    load_kw=load.kw,
+                    battery=battery,
+                )
+            )
+            if soc is None:
+                plan = replace(
+                    plan, warnings=plan.warnings + ("soc_unknown",)
+                )
+            self.plan_meta = {
+                "load_source": load.source,
+                "pv_source": pv.source,
+                "price_missing_hours": str(price_series.missing_hours),
+            }
+            return plan
+        except Exception as err:  # noqa: BLE001 - planning must not break updates
+            _LOGGER.warning("DSEM plan computation failed: %s", err)
+            self.plan_meta = {}
+            return None
+
     # -- update -------------------------------------------------------------
 
     async def _async_update_data(self) -> EnergySnapshot:
@@ -156,4 +302,5 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
         )
         if missing:
             _LOGGER.debug("DSEM snapshot incomplete, missing: %s", missing)
+        self.plan = await self._async_build_plan(snapshot)
         return snapshot

@@ -27,12 +27,16 @@
         "data": {
           "pv_forecast_entity": "PV forecast — energy today",
           "pv_forecast_tomorrow_entity": "PV forecast — energy tomorrow",
+          "pv_peak_today_entity": "PV forecast — peak time today",
+          "pv_peak_tomorrow_entity": "PV forecast — peak time tomorrow",
           "energy_import_entity": "Grid import energy counter",
           "energy_export_entity": "Grid export energy counter"
         },
         "data_description": {
           "pv_forecast_entity": "e.g. forecast_solar energy_production_today (kWh)",
           "pv_forecast_tomorrow_entity": "e.g. forecast_solar energy_production_tomorrow (kWh)",
+          "pv_peak_today_entity": "timestamp sensor; improves the hourly PV curve",
+          "pv_peak_tomorrow_entity": "timestamp sensor; improves the hourly PV curve",
           "energy_import_entity": "total_increasing energy sensor (kWh)",
           "energy_export_entity": "total_increasing energy sensor (kWh)"
         }
@@ -94,6 +98,18 @@
     "sensor": {
       "optimization_status": { "name": "Optimization status" },
       "current_strategy": { "name": "Current strategy" },
+      "plan_next_action": {
+        "name": "Plan next action",
+        "state": {
+          "charge_pv": "Charging from PV",
+          "charge_grid": "Charging from grid",
+          "discharge": "Discharging",
+          "import": "Importing (battery held)",
+          "export": "Exporting",
+          "idle": "Idle",
+          "hold": "Holding reserve"
+        }
+      },
       "grid_power": { "name": "Grid power" },
       "pv_power": { "name": "PV power" },
       "battery_power": { "name": "Battery power" },
