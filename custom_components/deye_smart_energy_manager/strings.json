@@ -71,20 +71,26 @@
           "export_price_eur_kwh": "Export/remuneration price",
           "influx_prices_enabled": "Use InfluxDB hourly prices",
           "influx_bucket": "InfluxDB price bucket",
+          "influx_tag_key": "InfluxDB discriminator tag",
           "influx_import_measurement": "InfluxDB import-price measurement",
           "influx_import_field": "InfluxDB import-price field",
+          "influx_import_tag": "InfluxDB import-price tag value",
           "influx_export_measurement": "InfluxDB export-price measurement",
-          "influx_export_field": "InfluxDB export-price field"
+          "influx_export_field": "InfluxDB export-price field",
+          "influx_export_tag": "InfluxDB export-price tag value"
         },
         "data_description": {
           "enable_control": "Required before selecting auto/economic/solar_priority/backup. Kept off after restarts.",
           "reserve_soc_pct": "Must be above minimum SOC",
           "influx_prices_enabled": "Reads hourly prices from an InfluxDB bucket (REE indicators). Reuses the URL/token/org of HA's influxdb entry. Falls back to PVPC when unavailable.",
           "influx_bucket": "Bucket where the external instance writes REE prices. Independent from the bucket HA exports its states to.",
-          "influx_import_measurement": "Leave empty for auto-discovery",
-          "influx_import_field": "Leave empty for auto-discovery",
-          "influx_export_measurement": "Leave empty for auto-discovery",
-          "influx_export_field": "Leave empty for auto-discovery"
+          "influx_tag_key": "Tag that discriminates import vs export prices inside the same measurement (e.g. tipo)",
+          "influx_import_measurement": "Default: electricity_price",
+          "influx_import_field": "Default: precio_kwh",
+          "influx_import_tag": "Default: consumo",
+          "influx_export_measurement": "Default: electricity_price",
+          "influx_export_field": "Default: precio_kwh",
+          "influx_export_tag": "Default: excedentes"
         }
       }
     },

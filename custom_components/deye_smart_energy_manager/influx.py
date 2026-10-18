@@ -23,11 +23,19 @@ from .const import (
     CONF_INFLUX_BUCKET,
     CONF_INFLUX_EXPORT_FIELD,
     CONF_INFLUX_EXPORT_MEASUREMENT,
+    CONF_INFLUX_EXPORT_TAG,
     CONF_INFLUX_IMPORT_FIELD,
     CONF_INFLUX_IMPORT_MEASUREMENT,
+    CONF_INFLUX_IMPORT_TAG,
+    CONF_INFLUX_TAG_KEY,
     DEFAULT_INFLUX_BUCKET,
+    DEFAULT_INFLUX_EXPORT_FIELD,
     DEFAULT_INFLUX_EXPORT_MEASUREMENT,
+    DEFAULT_INFLUX_EXPORT_TAG,
+    DEFAULT_INFLUX_IMPORT_FIELD,
     DEFAULT_INFLUX_IMPORT_MEASUREMENT,
+    DEFAULT_INFLUX_IMPORT_TAG,
+    DEFAULT_INFLUX_TAG_KEY,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -59,10 +67,13 @@ class InfluxSettings:
     api_version: str | None = None
     entry_keys: tuple[str, ...] = ()
     verify_ssl: bool = True
+    tag_key: str | None = None
     import_measurement: str | None = None
     import_field: str | None = None
+    import_tag: str | None = None
     export_measurement: str | None = None
     export_field: str | None = None
+    export_tag: str | None = None
 
 
 def get_influx_settings(hass, options: dict) -> InfluxSettings | None:
@@ -95,12 +106,19 @@ def get_influx_settings(hass, options: dict) -> InfluxSettings | None:
         api_version=str(base.get("api_version") or ""),
         entry_keys=tuple(sorted(base.keys())),
         verify_ssl=bool(base.get("verify_ssl", True)),
+        tag_key=options.get(CONF_INFLUX_TAG_KEY) or DEFAULT_INFLUX_TAG_KEY,
         import_measurement=options.get(CONF_INFLUX_IMPORT_MEASUREMENT)
         or DEFAULT_INFLUX_IMPORT_MEASUREMENT,
-        import_field=options.get(CONF_INFLUX_IMPORT_FIELD) or None,
+        import_field=options.get(CONF_INFLUX_IMPORT_FIELD)
+        or DEFAULT_INFLUX_IMPORT_FIELD,
+        import_tag=options.get(CONF_INFLUX_IMPORT_TAG)
+        or DEFAULT_INFLUX_IMPORT_TAG,
         export_measurement=options.get(CONF_INFLUX_EXPORT_MEASUREMENT)
         or DEFAULT_INFLUX_EXPORT_MEASUREMENT,
-        export_field=options.get(CONF_INFLUX_EXPORT_FIELD) or None,
+        export_field=options.get(CONF_INFLUX_EXPORT_FIELD)
+        or DEFAULT_INFLUX_EXPORT_FIELD,
+        export_tag=options.get(CONF_INFLUX_EXPORT_TAG)
+        or DEFAULT_INFLUX_EXPORT_TAG,
     )
     return settings
 
@@ -110,14 +128,26 @@ def _esc(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def _hourly_flux(bucket: str, measurement: str, field: str,
-                 start: datetime, stop: datetime) -> str:
+def _hourly_flux(
+    bucket: str,
+    measurement: str,
+    field: str,
+    start: datetime,
+    stop: datetime,
+    tag_key: str | None = None,
+    tag_value: str | None = None,
+) -> str:
     """Flux query: hourly mean of a measurement/field over a range."""
+    tag_filter = ""
+    if tag_key and tag_value:
+        tag_filter = (
+            f' and r["{_esc(tag_key)}"] == "{_esc(tag_value)}"'
+        )
     return (
         f'from(bucket: "{_esc(bucket)}")'
         f' |> range(start: {start.isoformat()}, stop: {stop.isoformat()})'
         f' |> filter(fn: (r) => r._measurement == "{_esc(measurement)}"'
-        f' and r._field == "{_esc(field)}")'
+        f' and r._field == "{_esc(field)}"{tag_filter})'
         " |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)"
         ' |> keep(columns: ["_time", "_value"])'
     )
@@ -145,6 +175,7 @@ def _sync_query_prices(
 
         import_m, import_f = settings.import_measurement, settings.import_field
         export_m, export_f = settings.export_measurement, settings.export_field
+        import_tag, export_tag = settings.import_tag, settings.export_tag
         if not all((import_m, import_f, export_m, export_f)):
             import_m, import_f, export_m, export_f, discovered = (
                 _discover(
@@ -169,20 +200,23 @@ def _sync_query_prices(
                 )
             except Exception as err:  # noqa: BLE001
                 meta["influx_discover_error"] = f"{err!r}"[:150]
-        meta["import_series"] = (
-            f"{import_m}.{import_f}" if import_m else "not_found"
-        )
-        meta["export_series"] = (
-            f"{export_m}.{export_f}" if export_m else "not_found"
-        )
+        def series_label(m, f, tag):
+            if not m:
+                return "not_found"
+            suffix = f"[{settings.tag_key}={tag}]" if tag else ""
+            return f"{m}.{f}{suffix}"
 
-        def points(measurement, field):
+        meta["import_series"] = series_label(import_m, import_f, import_tag)
+        meta["export_series"] = series_label(export_m, export_f, export_tag)
+
+        def points(measurement, field, tag):
             if not measurement or not field:
                 return {}
             out: dict[datetime, float] = {}
             tables = query_api.query(
                 _hourly_flux(
-                    settings.bucket, measurement, field, start, stop
+                    settings.bucket, measurement, field, start, stop,
+                    settings.tag_key, tag,
                 )
             )
             for table in tables:
@@ -196,18 +230,25 @@ def _sync_query_prices(
                         continue
             return out
 
-        def peek(measurement, kind):
+        def peek(measurement, kind, tag=None):
             """Raw points of a measurement — diagnostic sample with tags."""
+            tag_filter = ""
+            if tag and settings.tag_key:
+                tag_filter = (
+                    f' and r["{_esc(settings.tag_key)}"]'
+                    f' == "{_esc(tag)}"'
+                )
             try:
                 tables = query_api.query(
                     f'from(bucket: "{_esc(settings.bucket)}")'
                     " |> range(start: -365d)"
                     f' |> filter(fn: (r) => '
-                    f'r._measurement == "{_esc(measurement)}")'
+                    f'r._measurement == "{_esc(measurement)}"'
+                    f"{tag_filter})"
                     " |> last()"
                 )
                 sample = [
-                    f"{r.get_time()}|{r.values.get('entity_id') or ''}"
+                    f"{r.get_time()}|{r.values.get(settings.tag_key) or ''}"
                     f"|{r.get_field()}={r.get_value()}"
                     for t in tables
                     for r in t.records
@@ -223,15 +264,12 @@ def _sync_query_prices(
         meta["influx_org"] = settings.org
         meta["influx_entry_keys"] = ",".join(settings.entry_keys)
 
-        imp_pts = points(import_m, import_f)
-        exp_pts = points(export_m, export_f)
+        imp_pts = points(import_m, import_f, import_tag)
+        exp_pts = points(export_m, export_f, export_tag)
         if not imp_pts and import_m:
-            peek(import_m, "import")
+            peek(import_m, "import", import_tag)
         if not exp_pts and export_m:
-            peek(export_m, "export")
-        if not imp_pts or not exp_pts:
-            for cand in ("electricity_price", "EUR/kWh"):
-                peek(cand, f"cand_{cand.replace('/', '_')}")
+            peek(export_m, "export", export_tag)
         return imp_pts, exp_pts, meta
     finally:
         client.close()

@@ -63,13 +63,22 @@ compatible. Los errores se muestran por campo.
 
 ### Precios InfluxDB (REE indicators)
 
+Esquema real del bucket `ree_indicators` (verificado en Data Explorer):
+`_measurement = electricity_price`, `_field = precio_kwh`,
+tag `source = ree`, tag `tipo = consumo|excedentes`. La otra instancia
+escribe los precios REE en este bucket; `ha-gts-solutions` **solo lee**
+— la entrada `influxdb` de HA no debe exportar a este bucket
+(configurar su exportación a otro bucket, p. ej. `homeassistant`).
+
 | Opción | Default | Notas |
 |---|---|---|
-| `influx_prices_enabled` | `true` | Consulta el bucket `ree_indicators` de la config entry `influxdb` instalada (reutiliza URL/token — sin duplicar credenciales). Si la consulta falla, fallback a PVPC. |
-| `influx_import_measurement` / `influx_import_field` | `precio_consumo_kwh` / *(vacío = auto)* | Serie de precio de consumo del bucket `ree_indicators`. Field vacío → auto-descubrimiento (`value` si solo hay uno). |
-| `influx_export_measurement` / `influx_export_field` | `precio_excedentes_kwh` / *(vacío = auto)* | Serie de precio de vertido. Ídem. |
+| `influx_prices_enabled` | `true` | Consulta el bucket vía la config entry `influxdb` instalada (reutiliza URL/token/org — sin duplicar credenciales). Si la consulta falla, fallback a PVPC. |
+| `influx_bucket` | `ree_indicators` | Bucket de **lectura** de precios. Independiente del bucket de exportación configurado en la entrada influxdb de HA. |
+| `influx_tag_key` | `tipo` | Tag que discrimina consumo/vertido dentro del mismo measurement. |
+| `influx_import_measurement` / `influx_import_field` / `influx_import_tag` | `electricity_price` / `precio_kwh` / `consumo` | Serie de precio de consumo. |
+| `influx_export_measurement` / `influx_export_field` / `influx_export_tag` | `electricity_price` / `precio_kwh` / `excedentes` | Serie de precio de vertido. |
 
-Indicadores REE/ESIOS mapeados: **1001** = precio consumo,
+Indicadores REE/ESIOS origen: **1001** = precio consumo,
 **1739** = precio excedentes/vertido.
 
 Las series usadas quedan visibles en los atributos de

@@ -44,15 +44,25 @@ CONF_ENABLE_CONTROL = "enable_control"
 # InfluxDB hourly price source (optional; uses the influxdb config entry)
 CONF_INFLUX_PRICES_ENABLED = "influx_prices_enabled"
 CONF_INFLUX_BUCKET = "influx_bucket"
+CONF_INFLUX_TAG_KEY = "influx_tag_key"
 CONF_INFLUX_IMPORT_MEASUREMENT = "influx_import_measurement"
 CONF_INFLUX_IMPORT_FIELD = "influx_import_field"
+CONF_INFLUX_IMPORT_TAG = "influx_import_tag"
 CONF_INFLUX_EXPORT_MEASUREMENT = "influx_export_measurement"
 CONF_INFLUX_EXPORT_FIELD = "influx_export_field"
+CONF_INFLUX_EXPORT_TAG = "influx_export_tag"
 
-# Default measurement names of the audited ree_indicators bucket (GTS)
+# Real schema of the ree_indicators bucket (verified via Data Explorer):
+#   _measurement=electricity_price, _field=precio_kwh,
+#   tag source=ree, tag tipo=consumo|excedentes
 DEFAULT_INFLUX_BUCKET = "ree_indicators"
-DEFAULT_INFLUX_IMPORT_MEASUREMENT = "precio_consumo_kwh"
-DEFAULT_INFLUX_EXPORT_MEASUREMENT = "precio_excedentes_kwh"
+DEFAULT_INFLUX_TAG_KEY = "tipo"
+DEFAULT_INFLUX_IMPORT_MEASUREMENT = "electricity_price"
+DEFAULT_INFLUX_IMPORT_FIELD = "precio_kwh"
+DEFAULT_INFLUX_IMPORT_TAG = "consumo"
+DEFAULT_INFLUX_EXPORT_MEASUREMENT = "electricity_price"
+DEFAULT_INFLUX_EXPORT_FIELD = "precio_kwh"
+DEFAULT_INFLUX_EXPORT_TAG = "excedentes"
 
 # ---------------------------------------------------------------------------
 # Operating modes

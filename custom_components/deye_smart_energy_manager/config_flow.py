@@ -26,9 +26,12 @@ from .const import (
     CONF_INFLUX_BUCKET,
     CONF_INFLUX_EXPORT_FIELD,
     CONF_INFLUX_EXPORT_MEASUREMENT,
+    CONF_INFLUX_EXPORT_TAG,
     CONF_INFLUX_IMPORT_FIELD,
     CONF_INFLUX_IMPORT_MEASUREMENT,
+    CONF_INFLUX_IMPORT_TAG,
     CONF_INFLUX_PRICES_ENABLED,
+    CONF_INFLUX_TAG_KEY,
     CONF_LOAD_POWER_ENTITY,
     CONF_MAX_CHARGE_W,
     CONF_MAX_DISCHARGE_W,
@@ -56,8 +59,13 @@ from .const import (
     DEFAULT_GRID_POWER_ENTITY,
     DEFAULT_HORIZON_HOURS,
     DEFAULT_INFLUX_BUCKET,
+    DEFAULT_INFLUX_EXPORT_FIELD,
     DEFAULT_INFLUX_EXPORT_MEASUREMENT,
+    DEFAULT_INFLUX_EXPORT_TAG,
+    DEFAULT_INFLUX_IMPORT_FIELD,
     DEFAULT_INFLUX_IMPORT_MEASUREMENT,
+    DEFAULT_INFLUX_IMPORT_TAG,
+    DEFAULT_INFLUX_TAG_KEY,
     DEFAULT_LOAD_POWER_ENTITY,
     DEFAULT_MAX_CHARGE_W,
     DEFAULT_MAX_DISCHARGE_W,
@@ -401,16 +409,25 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                             CONF_INFLUX_BUCKET
                         ): selector.TextSelector(),
                         vol.Optional(
+                            CONF_INFLUX_TAG_KEY
+                        ): selector.TextSelector(),
+                        vol.Optional(
                             CONF_INFLUX_IMPORT_MEASUREMENT
                         ): selector.TextSelector(),
                         vol.Optional(
                             CONF_INFLUX_IMPORT_FIELD
                         ): selector.TextSelector(),
                         vol.Optional(
+                            CONF_INFLUX_IMPORT_TAG
+                        ): selector.TextSelector(),
+                        vol.Optional(
                             CONF_INFLUX_EXPORT_MEASUREMENT
                         ): selector.TextSelector(),
                         vol.Optional(
                             CONF_INFLUX_EXPORT_FIELD
+                        ): selector.TextSelector(),
+                        vol.Optional(
+                            CONF_INFLUX_EXPORT_TAG
                         ): selector.TextSelector(),
                     }
                 ),
@@ -458,19 +475,30 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                     CONF_INFLUX_BUCKET: options.get(
                         CONF_INFLUX_BUCKET, DEFAULT_INFLUX_BUCKET
                     ),
+                    CONF_INFLUX_TAG_KEY: options.get(
+                        CONF_INFLUX_TAG_KEY, DEFAULT_INFLUX_TAG_KEY
+                    ),
                     CONF_INFLUX_IMPORT_MEASUREMENT: options.get(
                         CONF_INFLUX_IMPORT_MEASUREMENT,
                         DEFAULT_INFLUX_IMPORT_MEASUREMENT,
                     ),
                     CONF_INFLUX_IMPORT_FIELD: options.get(
-                        CONF_INFLUX_IMPORT_FIELD, ""
+                        CONF_INFLUX_IMPORT_FIELD,
+                        DEFAULT_INFLUX_IMPORT_FIELD,
+                    ),
+                    CONF_INFLUX_IMPORT_TAG: options.get(
+                        CONF_INFLUX_IMPORT_TAG, DEFAULT_INFLUX_IMPORT_TAG
                     ),
                     CONF_INFLUX_EXPORT_MEASUREMENT: options.get(
                         CONF_INFLUX_EXPORT_MEASUREMENT,
                         DEFAULT_INFLUX_EXPORT_MEASUREMENT,
                     ),
                     CONF_INFLUX_EXPORT_FIELD: options.get(
-                        CONF_INFLUX_EXPORT_FIELD, ""
+                        CONF_INFLUX_EXPORT_FIELD,
+                        DEFAULT_INFLUX_EXPORT_FIELD,
+                    ),
+                    CONF_INFLUX_EXPORT_TAG: options.get(
+                        CONF_INFLUX_EXPORT_TAG, DEFAULT_INFLUX_EXPORT_TAG
                     ),
                 },
             ),
