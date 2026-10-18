@@ -156,7 +156,7 @@ def _sync_query_prices(
                     r.get_value() for t in tables for r in t.records
                 ]
                 meta["influx_measurements"] = (
-                    ",".join(str(n) for n in names[:30]) or "none"
+                    ",".join(str(n) for n in names[:100]) or "none"
                 )
             except Exception as err:  # noqa: BLE001
                 meta["influx_discover_error"] = f"{err!r}"[:150]
@@ -188,17 +188,18 @@ def _sync_query_prices(
             return out
 
         def peek(measurement, kind):
-            """Last raw points of a measurement — diagnostic sample."""
+            """Raw points of a measurement — diagnostic sample with tags."""
             try:
                 tables = query_api.query(
                     f'from(bucket: "{_esc(settings.bucket)}")'
-                    " |> range(start: -30d)"
+                    " |> range(start: -365d)"
                     f' |> filter(fn: (r) => '
                     f'r._measurement == "{_esc(measurement)}")'
                     " |> last()"
                 )
                 sample = [
-                    f"{r.get_time()}|{r.get_field()}={r.get_value()}"
+                    f"{r.get_time()}|{r.values.get('entity_id') or ''}"
+                    f"|{r.get_field()}={r.get_value()}"
                     for t in tables
                     for r in t.records
                 ][:8]
@@ -219,6 +220,9 @@ def _sync_query_prices(
             peek(import_m, "import")
         if not exp_pts and export_m:
             peek(export_m, "export")
+        if not imp_pts or not exp_pts:
+            for cand in ("electricity_price", "EUR/kWh"):
+                peek(cand, f"cand_{cand.replace('/', '_')}")
         return imp_pts, exp_pts, meta
     finally:
         client.close()
