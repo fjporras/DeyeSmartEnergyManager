@@ -257,10 +257,13 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
                     )
                 ),
             )
+            self.plan_meta["price_missing_hours"] = str(
+                sum(1 for p in import_prices if p is None)
+            )
             plan = optimize(
                 PlannerInput(
                     first_hour=price_series.first_hour,
-                    import_prices=price_series.prices,
+                    import_prices=import_prices,
                     export_price_eur_kwh=float(
                         opts.get(
                             CONF_EXPORT_PRICE_EUR_KWH,
