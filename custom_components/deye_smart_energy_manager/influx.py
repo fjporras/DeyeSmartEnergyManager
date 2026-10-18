@@ -19,6 +19,15 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from .const import (
+    CONF_INFLUX_EXPORT_FIELD,
+    CONF_INFLUX_EXPORT_MEASUREMENT,
+    CONF_INFLUX_IMPORT_FIELD,
+    CONF_INFLUX_IMPORT_MEASUREMENT,
+    DEFAULT_INFLUX_EXPORT_MEASUREMENT,
+    DEFAULT_INFLUX_IMPORT_MEASUREMENT,
+)
+
 _LOGGER = logging.getLogger(__name__)
 
 INFLUX_DOMAIN = "influxdb"
@@ -68,10 +77,12 @@ def get_influx_settings(hass, options: dict) -> InfluxSettings | None:
         org=base.get("org") or "-",
         bucket=base.get("bucket") or base.get("bucket_name") or "",
         verify_ssl=bool(base.get("verify_ssl", True)),
-        import_measurement=options.get("influx_import_measurement") or None,
-        import_field=options.get("influx_import_field") or None,
-        export_measurement=options.get("influx_export_measurement") or None,
-        export_field=options.get("influx_export_field") or None,
+        import_measurement=options.get(CONF_INFLUX_IMPORT_MEASUREMENT)
+        or DEFAULT_INFLUX_IMPORT_MEASUREMENT,
+        import_field=options.get(CONF_INFLUX_IMPORT_FIELD) or None,
+        export_measurement=options.get(CONF_INFLUX_EXPORT_MEASUREMENT)
+        or DEFAULT_INFLUX_EXPORT_MEASUREMENT,
+        export_field=options.get(CONF_INFLUX_EXPORT_FIELD) or None,
     )
 
 
