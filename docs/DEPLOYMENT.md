@@ -9,14 +9,29 @@ Despliegue de la integración `deye_smart_energy_manager` en la instancia
 
 ## 1. Prerrequisitos
 
-- Acceso SSH al host Docker que ejecuta el contenedor `homeassistant`.
+- Acceso SSH al host Docker que ejecuta el contenedor `homeassistant`
+  (solo para la vía manual — la vía HACS no lo necesita).
 - Ruta del directorio `/config` de HA en el host (p. ej.
   `/opt/homeassistant` o `/srv/homeassistant`). En este documento:
   `$HA_CONFIG`.
 - Puerta de control **desactivada** por defecto — el despliegue es seguro:
   tras el reinicio, DSEM arranca en modo `shadow` y `enable_control=false`.
 
-## 2. Copiar la integración
+## 2A. Vía HACS (recomendada — actualizaciones desde la UI)
+
+1. Subir este repositorio a GitHub (público; o privado configurando un
+   token de GitHub en HACS).
+2. En HA: **HACS → ⋮ → Custom repositories** → pegar la URL del repo,
+   categoría `Integration` → **Add**.
+3. Buscar "Deye Smart Energy Manager" en HACS → **Download** →
+   **reiniciar HA**.
+4. Cada `git push` a la rama seguida aparecerá como actualización
+   disponible en HACS.
+
+La estructura del repo ya cumple el layout de HACS
+(`custom_components/deye_smart_energy_manager/` + `hacs.json` en raíz).
+
+## 2B. Vía manual (SSH/SCP)
 
 ```bash
 # Desde la raíz del repo (host local)
@@ -29,6 +44,14 @@ ssh usuario@<host> 'ls -la $HA_CONFIG/custom_components/deye_smart_energy_manage
 ```
 
 Equivalente Windows (PowerShell + OpenSSH): ver `scripts/deploy.ps1`.
+También se puede descargar el repo directamente en el host:
+
+```bash
+ssh usuario@<host> 'cd /tmp && \
+  curl -L https://github.com/<usuario>/<repo>/archive/refs/heads/master.tar.gz \
+  | tar xz && cp -r <repo>-master/custom_components/deye_smart_energy_manager \
+  $HA_CONFIG/custom_components/'
+```
 
 ## 3. Verificación de configuración (recomendado, sin reiniciar)
 
