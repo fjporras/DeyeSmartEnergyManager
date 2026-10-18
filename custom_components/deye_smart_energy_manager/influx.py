@@ -146,6 +146,20 @@ def _sync_query_prices(
             meta["influx_measurements"] = (
                 ",".join(str(m) for m in discovered[:30]) or "none"
             )
+        if "influx_measurements" not in meta:
+            try:
+                tables = query_api.query(
+                    'import "influxdata/influxdb/schema"'
+                    f' schema.measurements(bucket: "{_esc(settings.bucket)}")'
+                )
+                names = [
+                    r.get_value() for t in tables for r in t.records
+                ]
+                meta["influx_measurements"] = (
+                    ",".join(str(n) for n in names[:30]) or "none"
+                )
+            except Exception as err:  # noqa: BLE001
+                meta["influx_discover_error"] = f"{err!r}"[:150]
         meta["import_series"] = (
             f"{import_m}.{import_f}" if import_m else "not_found"
         )
@@ -178,7 +192,7 @@ def _sync_query_prices(
             try:
                 tables = query_api.query(
                     f'from(bucket: "{_esc(settings.bucket)}")'
-                    f" |> range(start: {start.isoformat()})"
+                    " |> range(start: -30d)"
                     f' |> filter(fn: (r) => '
                     f'r._measurement == "{_esc(measurement)}")'
                     " |> last()"
