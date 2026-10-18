@@ -55,6 +55,7 @@ class InfluxSettings:
     org: str
     bucket: str
     api_version: str | None = None
+    entry_keys: tuple[str, ...] = ()
     verify_ssl: bool = True
     import_measurement: str | None = None
     import_field: str | None = None
@@ -75,9 +76,15 @@ def get_influx_settings(hass, options: dict) -> InfluxSettings | None:
     settings = InfluxSettings(
         url=base["url"],
         token=base["token"],
-        org=base.get("org") or "-",
+        org=(
+            base.get("org")
+            or base.get("organization")
+            or base.get("org_name")
+            or ""
+        ),
         bucket=base.get("bucket") or base.get("bucket_name") or "",
         api_version=str(base.get("api_version") or ""),
+        entry_keys=tuple(sorted(base.keys())),
         verify_ssl=bool(base.get("verify_ssl", True)),
         import_measurement=options.get(CONF_INFLUX_IMPORT_MEASUREMENT)
         or DEFAULT_INFLUX_IMPORT_MEASUREMENT,
@@ -168,6 +175,8 @@ def _sync_query_prices(
 
         meta["influx_api_version"] = settings.api_version or "?"
         meta["influx_bucket"] = settings.bucket
+        meta["influx_org"] = settings.org
+        meta["influx_entry_keys"] = ",".join(settings.entry_keys)
         return points(import_m, import_f), points(export_m, export_f), meta
     finally:
         client.close()
