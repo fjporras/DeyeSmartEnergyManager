@@ -66,8 +66,11 @@ compatible. Los errores se muestran por campo.
 | Opción | Default | Notas |
 |---|---|---|
 | `influx_prices_enabled` | `true` | Consulta el bucket `ree_indicators` de la config entry `influxdb` instalada (reutiliza URL/token — sin duplicar credenciales). Si la consulta falla, fallback a PVPC. |
-| `influx_import_measurement` / `influx_import_field` | *(vacío = auto)* | Serie de precio de consumo. Vacío → auto-descubrimiento por nombre (`pvpc/precio/consumo/omie/…`). |
-| `influx_export_measurement` / `influx_export_field` | *(vacío = auto)* | Serie de precio de vertido. Vacío → auto-descubrimiento (`vertido/compensación/excedente/…`). |
+| `influx_import_measurement` / `influx_import_field` | `precio_consumo_kwh` / *(vacío = auto)* | Serie de precio de consumo del bucket `ree_indicators`. Field vacío → auto-descubrimiento (`value` si solo hay uno). |
+| `influx_export_measurement` / `influx_export_field` | `precio_excedentes_kwh` / *(vacío = auto)* | Serie de precio de vertido. Ídem. |
+
+Indicadores REE/ESIOS mapeados: **1001** = precio consumo,
+**1739** = precio excedentes/vertido.
 
 Las series usadas quedan visibles en los atributos de
 `sensor.dsem_plan_next_action` (`import_series`/`export_series`,

@@ -48,6 +48,10 @@ CONF_INFLUX_IMPORT_FIELD = "influx_import_field"
 CONF_INFLUX_EXPORT_MEASUREMENT = "influx_export_measurement"
 CONF_INFLUX_EXPORT_FIELD = "influx_export_field"
 
+# Default measurement names of the audited ree_indicators bucket (GTS)
+DEFAULT_INFLUX_IMPORT_MEASUREMENT = "precio_consumo_kwh"
+DEFAULT_INFLUX_EXPORT_MEASUREMENT = "precio_excedentes_kwh"
+
 # ---------------------------------------------------------------------------
 # Operating modes
 # ---------------------------------------------------------------------------

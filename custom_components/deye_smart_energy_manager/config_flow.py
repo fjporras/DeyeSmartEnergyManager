@@ -54,6 +54,8 @@ from .const import (
     DEFAULT_EXPORT_PRICE_EUR_KWH,
     DEFAULT_GRID_POWER_ENTITY,
     DEFAULT_HORIZON_HOURS,
+    DEFAULT_INFLUX_EXPORT_MEASUREMENT,
+    DEFAULT_INFLUX_IMPORT_MEASUREMENT,
     DEFAULT_LOAD_POWER_ENTITY,
     DEFAULT_MAX_CHARGE_W,
     DEFAULT_MAX_DISCHARGE_W,
@@ -449,13 +451,15 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                         CONF_INFLUX_PRICES_ENABLED, True
                     ),
                     CONF_INFLUX_IMPORT_MEASUREMENT: options.get(
-                        CONF_INFLUX_IMPORT_MEASUREMENT, ""
+                        CONF_INFLUX_IMPORT_MEASUREMENT,
+                        DEFAULT_INFLUX_IMPORT_MEASUREMENT,
                     ),
                     CONF_INFLUX_IMPORT_FIELD: options.get(
                         CONF_INFLUX_IMPORT_FIELD, ""
                     ),
                     CONF_INFLUX_EXPORT_MEASUREMENT: options.get(
-                        CONF_INFLUX_EXPORT_MEASUREMENT, ""
+                        CONF_INFLUX_EXPORT_MEASUREMENT,
+                        DEFAULT_INFLUX_EXPORT_MEASUREMENT,
                     ),
                     CONF_INFLUX_EXPORT_FIELD: options.get(
                         CONF_INFLUX_EXPORT_FIELD, ""
