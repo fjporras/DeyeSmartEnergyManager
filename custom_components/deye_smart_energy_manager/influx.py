@@ -119,7 +119,7 @@ def _sync_query_prices(
             import_m, import_f, export_m, export_f, discovered = (
                 _discover(
                     query_api, settings.bucket, import_m, import_f,
-                    export_m, export_f,
+                    export_m, export_f, meta,
                 )
             )
             meta["influx_measurements"] = (
@@ -157,10 +157,12 @@ def _sync_query_prices(
         client.close()
 
 
-def _discover(query_api, bucket, import_m, import_f, export_m, export_f):
+def _discover(query_api, bucket, import_m, import_f, export_m, export_f,
+              meta):
     """Auto-discover measurement/field pairs via influxdb/schema.
 
-    Returns (import_m, import_f, export_m, export_f, measurements)."""
+    Returns (import_m, import_f, export_m, export_f, measurements).
+    Discovery errors are surfaced in ``meta`` for diagnosis."""
     try:
         tables = query_api.query(
             'import "influxdata/influxdb/schema"'
@@ -169,6 +171,7 @@ def _discover(query_api, bucket, import_m, import_f, export_m, export_f):
         measurements = [r.get_value() for t in tables for r in t.records]
     except Exception as err:  # noqa: BLE001
         _LOGGER.debug("DSEM influx measurement discovery failed: %s", err)
+        meta["influx_discover_error"] = str(err)[:200]
         measurements = []
 
     def pick(measurement, field, pattern):
@@ -194,6 +197,7 @@ def _discover(query_api, bucket, import_m, import_f, export_m, export_f):
             fields = [r.get_value() for t in ft for r in t.records]
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("DSEM influx field discovery failed: %s", err)
+            meta["influx_fieldkeys_error"] = str(err)[:200]
             fields = []
         f = next((f for f in fields if pattern.search(str(f))), None)
         if f is None and len(fields) == 1:
