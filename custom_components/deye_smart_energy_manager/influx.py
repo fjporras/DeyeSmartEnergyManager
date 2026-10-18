@@ -24,11 +24,16 @@ _LOGGER = logging.getLogger(__name__)
 INFLUX_DOMAIN = "influxdb"
 
 # Name patterns for auto-discovery (measurement or field names).
+# The REE ESIOS indicator codes (1001 = PVPC consumo, 1739 = vertido)
+# are matched literally — the bucket may store them as measurement or
+# field names.
 _IMPORT_RE = re.compile(
-    r"pvpc|precio.*consumo|price|omie|spot|consumo|import|compra", re.I
+    r"pvpc|precio.*consumo|price|omie|spot|consumo|import|compra|\b1001\b",
+    re.I,
 )
 _EXPORT_RE = re.compile(
-    r"vertido|export|feed.?in|compensa|excedent|venta|sell", re.I
+    r"vertido|export|feed.?in|compensa|excedent|venta|sell|\b1739\b",
+    re.I,
 )
 
 
