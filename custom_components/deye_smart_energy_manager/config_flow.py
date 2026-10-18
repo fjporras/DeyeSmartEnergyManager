@@ -23,6 +23,11 @@ from .const import (
     CONF_EXPORT_PRICE_EUR_KWH,
     CONF_GRID_POWER_ENTITY,
     CONF_HORIZON_HOURS,
+    CONF_INFLUX_EXPORT_FIELD,
+    CONF_INFLUX_EXPORT_MEASUREMENT,
+    CONF_INFLUX_IMPORT_FIELD,
+    CONF_INFLUX_IMPORT_MEASUREMENT,
+    CONF_INFLUX_PRICES_ENABLED,
     CONF_LOAD_POWER_ENTITY,
     CONF_MAX_CHARGE_W,
     CONF_MAX_DISCHARGE_W,
@@ -385,6 +390,21 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                                 unit_of_measurement="€/kWh",
                             )
                         ),
+                        vol.Required(
+                            CONF_INFLUX_PRICES_ENABLED
+                        ): selector.BooleanSelector(),
+                        vol.Optional(
+                            CONF_INFLUX_IMPORT_MEASUREMENT
+                        ): selector.TextSelector(),
+                        vol.Optional(
+                            CONF_INFLUX_IMPORT_FIELD
+                        ): selector.TextSelector(),
+                        vol.Optional(
+                            CONF_INFLUX_EXPORT_MEASUREMENT
+                        ): selector.TextSelector(),
+                        vol.Optional(
+                            CONF_INFLUX_EXPORT_FIELD
+                        ): selector.TextSelector(),
                     }
                 ),
                 {
@@ -424,6 +444,21 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                     ),
                     CONF_EXPORT_PRICE_EUR_KWH: options.get(
                         CONF_EXPORT_PRICE_EUR_KWH, DEFAULT_EXPORT_PRICE_EUR_KWH
+                    ),
+                    CONF_INFLUX_PRICES_ENABLED: options.get(
+                        CONF_INFLUX_PRICES_ENABLED, True
+                    ),
+                    CONF_INFLUX_IMPORT_MEASUREMENT: options.get(
+                        CONF_INFLUX_IMPORT_MEASUREMENT, ""
+                    ),
+                    CONF_INFLUX_IMPORT_FIELD: options.get(
+                        CONF_INFLUX_IMPORT_FIELD, ""
+                    ),
+                    CONF_INFLUX_EXPORT_MEASUREMENT: options.get(
+                        CONF_INFLUX_EXPORT_MEASUREMENT, ""
+                    ),
+                    CONF_INFLUX_EXPORT_FIELD: options.get(
+                        CONF_INFLUX_EXPORT_FIELD, ""
                     ),
                 },
             ),

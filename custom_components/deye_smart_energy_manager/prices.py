@@ -107,3 +107,27 @@ def build_price_series(
         else:
             prices.append(None)
     return PriceSeries(first_hour, tuple(prices))
+
+
+def series_from_points(
+    points: dict[datetime, float],
+    first_hour: datetime,
+    horizon_hours: int,
+) -> tuple[float | None, ...]:
+    """Align a {timestamp: value} map to an hourly series.
+
+    Point timestamps may be in any tz; they are converted to the tz of
+    ``first_hour`` and floored to the hour. Missing hours stay ``None``.
+    """
+    keyed: dict[datetime, float] = {}
+    for ts, value in points.items():
+        if ts.tzinfo is None:
+            # Naive point: adopt the series tz (None stays naive).
+            local = ts.replace(tzinfo=first_hour.tzinfo)
+        else:
+            local = ts.astimezone(first_hour.tzinfo)
+        keyed[local.replace(minute=0, second=0, microsecond=0)] = value
+    return tuple(
+        keyed.get(first_hour + timedelta(hours=i))
+        for i in range(horizon_hours)
+    )

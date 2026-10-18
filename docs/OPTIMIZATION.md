@@ -52,7 +52,8 @@ así que el recambio será local a `optimizer.optimize()`.
 
 | Serie | Fuente | Fallback |
 |---|---|---|
-| `price[t]` | `sensor.esios_pvpc` attrs `price_XXh` (+ `price_next_day_XXh` cuando ESIOS publica) | Huecos: mediana del horizonte + warning `price_gaps_filled`; sin datos: warning `no_price_data`, sin arbitraje |
+| `price[t]` | **InfluxDB `ree_indicators`** (serie horaria, si `influx_prices_enabled` y consulta OK) → merge sobre `sensor.esios_pvpc` attrs `price_XXh` (+ `price_next_day_XXh`) | Huecos: mediana del horizonte + warning `price_gaps_filled`; sin datos: `no_price_data`, sin arbitraje |
+| `export_price[t]` | InfluxDB `ree_indicators` (vertido horario) | `export_price_eur_kwh` fijo (0,14) |
 | `pv_kw[t]` | forecast_solar (totales hoy/mañana + hora de pico) distribuido en campana Gaussiana σ=3 h | 0 kW sin previsión |
 | `load_kw[t]` | `statistics` de Recorder (media horaria 14 días del sensor de load) | Perfil residencial ES escalado a kWh/día recientes |
 

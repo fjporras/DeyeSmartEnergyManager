@@ -117,3 +117,28 @@ def test_invalid_battery_params_warn():
     bat = BatteryParams(**{**BAT.__dict__, "soc_min_pct": 96.0})
     plan = optimize(_inp([0.15] * 24, [0.0] * 24, [1.0] * 24, bat=bat))
     assert "invalid_soc_range" in plan.warnings
+
+
+def test_hourly_export_prices_applied():
+    """Hourly export series (InfluxDB vertido) overrides the flat price."""
+    bat = BatteryParams(**{**BAT.__dict__, "soc_pct": 95.0})
+    pv = [6.0 if h == 12 else 0.0 for h in range(24)]
+    inp = PlannerInput(
+        first_hour=T0,
+        import_prices=tuple([0.15] * 24),
+        export_price_eur_kwh=0.14,
+        pv_kw=tuple(pv),
+        load_kw=tuple([1.0] * 24),
+        battery=bat,
+        export_prices=tuple(
+            0.05 if h == 12 else 0.14 for h in range(24)
+        ),
+    )
+    plan = optimize(inp)
+    slot12 = plan.slots[12]
+    assert slot12.grid_power_w < 0  # exporting
+    # 23 deficit hours imported at 0.15; 5 kW exported at the hourly
+    # vertido price 0.05 (not the flat 0.14 fallback).
+    assert abs(
+        plan.expected_cost_eur - (23 * 0.15 - 5.0 * 0.05)
+    ) < 0.01

@@ -58,10 +58,11 @@ class PlannerInput:
 
     first_hour: datetime
     import_prices: tuple[float | None, ...]  # EUR/kWh per hour
-    export_price_eur_kwh: float
+    export_price_eur_kwh: float              # flat fallback
     pv_kw: tuple[float, ...]
     load_kw: tuple[float, ...]
     battery: BatteryParams
+    export_prices: tuple[float | None, ...] | None = None  # hourly, wins
 
 
 def _quantile(sorted_vals: list[float], q: float) -> float:
@@ -121,10 +122,14 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
         pv = inp.pv_kw[i] if i < len(inp.pv_kw) else 0.0
         load = inp.load_kw[i] if i < len(inp.load_kw) else 0.0
         price = prices[i] if prices[i] != _UNKNOWN else None
+        eprice = inp.export_price_eur_kwh
+        if inp.export_prices and i < len(inp.export_prices) \
+                and inp.export_prices[i] is not None:
+            eprice = inp.export_prices[i]
         hour = inp.first_hour + timedelta(hours=i)
 
         baseline += max(0.0, load - pv) * (price or 0.0)
-        baseline -= max(0.0, pv - load) * inp.export_price_eur_kwh
+        baseline -= max(0.0, pv - load) * eprice
 
         batt_w = 0.0  # signed convention: - charge / + discharge
         reason = "balanced"
@@ -185,7 +190,7 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
         imp = max(0.0, grid)
         exp = max(0.0, -grid)
         cost += imp * (price or 0.0)
-        cost -= exp * inp.export_price_eur_kwh
+        cost -= exp * eprice
 
         slots.append(
             PlanSlot(

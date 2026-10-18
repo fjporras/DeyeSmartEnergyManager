@@ -23,6 +23,7 @@ from .const import (
     CONF_EXPORT_PRICE_EUR_KWH,
     CONF_GRID_POWER_ENTITY,
     CONF_HORIZON_HOURS,
+    CONF_INFLUX_PRICES_ENABLED,
     CONF_LOAD_POWER_ENTITY,
     CONF_MAX_CHARGE_W,
     CONF_MAX_DISCHARGE_W,
@@ -57,9 +58,10 @@ from .forecast import (
     build_load_series,
     build_pv_series,
 )
+from .influx import async_query_hourly_prices, get_influx_settings
 from .model import EnergyPlan, EnergySnapshot
 from .optimizer import BatteryParams, PlannerInput, optimize
-from .prices import build_price_series
+from .prices import build_price_series, series_from_points
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -192,6 +194,29 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
                 self._datetime(data.get(CONF_PV_PEAK_TODAY_ENTITY)),
                 self._datetime(data.get(CONF_PV_PEAK_TOMORROW_ENTITY)),
             )
+            import_prices = price_series.prices
+            export_prices = None
+            self.plan_meta = {
+                "load_source": load.source,
+                "pv_source": pv.source,
+                "price_source": "pvpc",
+                "price_missing_hours": str(price_series.missing_hours),
+            }
+            if opts.get(CONF_INFLUX_PRICES_ENABLED, True):
+                influx = await self._async_influx_prices(
+                    now, horizon, price_series.first_hour
+                )
+                if influx is not None:
+                    imp, exp, meta = influx
+                    self.plan_meta.update(meta)
+                    if any(v is not None for v in imp):
+                        import_prices = tuple(
+                            i if i is not None else p
+                            for i, p in zip(imp, price_series.prices)
+                        )
+                        self.plan_meta["price_source"] = "influxdb"
+                    if any(v is not None for v in exp):
+                        export_prices = exp
             soc = snapshot.battery_soc_pct
             reserve = float(
                 opts.get(CONF_RESERVE_SOC_PCT, DEFAULT_RESERVE_SOC_PCT)
@@ -243,22 +268,39 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
                     pv_kw=pv.kw,
                     load_kw=load.kw,
                     battery=battery,
+                    export_prices=export_prices,
                 )
             )
             if soc is None:
                 plan = replace(
                     plan, warnings=plan.warnings + ("soc_unknown",)
                 )
-            self.plan_meta = {
-                "load_source": load.source,
-                "pv_source": pv.source,
-                "price_missing_hours": str(price_series.missing_hours),
-            }
             return plan
         except Exception as err:  # noqa: BLE001 - planning must not break updates
             _LOGGER.warning("DSEM plan computation failed: %s", err)
             self.plan_meta = {}
             return None
+
+    async def _async_influx_prices(
+        self, now: datetime, horizon: int, first_hour: datetime
+    ) -> tuple[tuple, tuple, dict] | None:
+        """Hourly import/export prices from the REE indicators bucket.
+
+        Returns aligned (import, export, meta) tuples, or None when the
+        source is unavailable/misconfigured.
+        """
+        settings = get_influx_settings(self.hass, self._entry.options)
+        if settings is None or not settings.bucket:
+            return None
+        result = await async_query_hourly_prices(
+            self.hass, settings, now, horizon
+        )
+        if result is None:
+            return None
+        imp_pts, exp_pts, meta = result
+        imp = series_from_points(imp_pts, first_hour, horizon)
+        exp = series_from_points(exp_pts, first_hour, horizon)
+        return imp, exp, meta
 
     # -- update -------------------------------------------------------------
 

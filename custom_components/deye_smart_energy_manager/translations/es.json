@@ -60,7 +60,12 @@
           "horizon_hours": "Horizonte de optimización",
           "step_minutes": "Paso de optimización",
           "optimize_interval_min": "Intervalo de recálculo",
-          "export_price_eur_kwh": "Precio de exportación/compensación"
+          "export_price_eur_kwh": "Precio de exportación/compensación",
+          "influx_prices_enabled": "Usar precios horarios de InfluxDB",
+          "influx_import_measurement": "Measurement de precio de consumo",
+          "influx_import_field": "Field de precio de consumo",
+          "influx_export_measurement": "Measurement de precio de vertido",
+          "influx_export_field": "Field de precio de vertido"
         }
       }
     },

@@ -26,6 +26,8 @@ auditados en `docs/ENTITY_AUDIT.md`. Todos son modificables.
 |---|---|---|
 | `pv_forecast_entity` | `sensor.energy_production_today` | Escalado del perfil FV diario |
 | `pv_forecast_tomorrow_entity` | `sensor.energy_production_tomorrow` | Energía FV de mañana |
+| `pv_peak_today_entity` | `sensor.power_highest_peak_time_today` | Centra la curva FV sintetizada |
+| `pv_peak_tomorrow_entity` | `sensor.power_highest_peak_time_tomorrow` | Ídem mañana |
 | `energy_import_entity` | `sensor.deye_…_total_energy_import` | Contador kWh (economía) |
 | `energy_export_entity` | `sensor.deye_…_total_energy_export` | Contador kWh exportación |
 | `ev_*` / `acs_*` | *(vacío)* | Inactivos — no hay VE ni termo en la instalación |
@@ -56,8 +58,20 @@ compatible. Los errores se muestran por campo.
 | `horizon_hours` | 24 |
 | `step_minutes` | 60 |
 | `optimize_interval_min` | 15 |
-| `export_price_eur_kwh` | 0.14 (confirmar con comercializadora) |
+| `export_price_eur_kwh` | 0.14 (fallback si no hay serie horaria de vertido) |
 | `price_fallback` | `conservative` |
+
+### Precios InfluxDB (REE indicators)
+
+| Opción | Default | Notas |
+|---|---|---|
+| `influx_prices_enabled` | `true` | Consulta el bucket `ree_indicators` de la config entry `influxdb` instalada (reutiliza URL/token — sin duplicar credenciales). Si la consulta falla, fallback a PVPC. |
+| `influx_import_measurement` / `influx_import_field` | *(vacío = auto)* | Serie de precio de consumo. Vacío → auto-descubrimiento por nombre (`pvpc/precio/consumo/omie/…`). |
+| `influx_export_measurement` / `influx_export_field` | *(vacío = auto)* | Serie de precio de vertido. Vacío → auto-descubrimiento (`vertido/compensación/excedente/…`). |
+
+Las series usadas quedan visibles en los atributos de
+`sensor.dsem_plan_next_action` (`import_series`/`export_series`,
+`price_source`).
 
 ### Control
 

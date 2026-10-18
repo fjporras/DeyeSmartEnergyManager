@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from dsem.prices import build_price_series
+from dsem.prices import build_price_series, series_from_points
 
 NOW = datetime(2026, 10, 18, 14, 32)
 
@@ -48,3 +48,28 @@ def test_empty_attributes_all_none():
     s = build_price_series({}, NOW, 24)
     assert s.known == ()
     assert s.missing_hours == 24
+
+
+def test_series_from_points_aligns_hours():
+    first = datetime(2026, 10, 18, 14, 0)
+    points = {
+        datetime(2026, 10, 18, 14, 12): 0.10,   # floors to 14:00
+        datetime(2026, 10, 18, 16, 55): 0.30,   # floors to 16:00
+    }
+    s = series_from_points(points, first, 4)
+    assert s == (0.10, None, 0.30, None)
+
+
+def test_series_from_points_utc_to_local():
+    from datetime import timezone, timedelta
+
+    first = datetime(2026, 10, 18, 14, 0)  # naive = same-tz as points
+    # A UTC point at 12:00 maps to 14:00 local (+02:00 CEST).
+    points = {
+        datetime(2026, 10, 18, 12, 0, tzinfo=timezone.utc): 0.20,
+    }
+    local_tz = timezone(timedelta(hours=2))
+    first = first.replace(tzinfo=local_tz)
+    s = series_from_points(points, first, 2)
+    assert s[0] == 0.20
+    assert s[1] is None

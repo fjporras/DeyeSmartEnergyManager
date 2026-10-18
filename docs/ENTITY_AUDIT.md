@@ -216,7 +216,7 @@ Prefijo común Deye: `*.deye_sun_15k_sg05lp3_eu_sm2_*` (algunas con prefijo de �
 | entity_id | Valor | Detalle |
 |---|---|---|
 | `sensor.esios_pvpc` | 0,05338 €/kWh | **PVPC 2.0TD.** Atributos `price_00h`…`price_23h` (precio del día, €/kWh), `period`/`next_period`, `min/max_price(+_at)`, `price_position`, `available_power` 9800 W. Mañana se publica ~20:35 (aún no disponible a las 17:40). Es el **precio regulado completo** (incluye peajes/cargos del PVPC), no solo OMIE. |
-| Precio de exportación | — | ❌ **No existe sensor** de compensación por excedentes. `froniussolarnet_tarifa_exportacion`=0,14 €/kWh es un valor estático configurado en SolarNet (no contractual verificado). DSEM necesitará parámetro configurable. |
+| ~~Precio de exportación~~ | — | ✅ **RESUELTO (2026-10-18, InfluxDB):** el usuario instaló la integración `influxdb` (entry `01M57XYDZZGXK5ARAAEEBY1XV5`, `https://influx.gerentaenergia.es`, bucket `ree_indicators`) que contiene **precios de consumo y de vertido a red**. La entrada es de solo-exportación (no crea sensores): DSEM la consulta directamente con Flux reutilizando sus credenciales, con auto-descubrimiento de measurement/field (override manual en opciones). Fallback: PVPC + `export_price_eur_kwh` fijo. |
 
 ### 5.5. VEHÍCULO ELÉCTRICO — ❌ NO DISPONIBLE
 
@@ -266,7 +266,7 @@ Sin dominios `water_heater`, `climate`, ni sensores dedicados. El pico vespertin
 | 5 | **Historia cruda ~10 días; estadísticas ~2,5 meses** | Perfiles estacionales débiles | Acumular estadísticas; valorar InfluxDB si tiene histórico largo (acceso no verificable por MCP) |
 | 6 | **Capacidad útil batería incierta** | Nominal config 628 Ah; BMS "Corrected Capacity" 439 Ah; estimador solarman 36,1 kWh | Validar empíricamente; hacerlo parámetro configurable |
 | 7 | **Automatización PVPC de carga ya controla `battery_grid_charging`** | Conflicto de actuadores en AUTO | Coordinar/desactivar en fase de activación (con autorización) |
-| 8 | **Sin sensor de precio de exportación** | Compensación no modelable desde HA | Parámetro configurable en DSEM (o integración adicional p. ej. esios compensación) |
+| ~~8~~ | ~~Sin sensor de precio de exportación~~ | **RESUELTO:** bucket `ree_indicators` (InfluxDB) con precios de consumo y vertido | Verificar en el primer arranque los measurement/field auto-descubiertos (visibles en `sensor.dsem_plan_next_action` → `import_series`/`export_series`) |
 | 9 | **Energy Dashboard nunca configurado** | — | Opcionalmente aprovechar DSEM para definir fuentes |
 | 10 | Escritura Modbus por entidades number/select/switch/time | Desgaste EEPROM del logger/inversor si se escribe cada ciclo | Rate-limiting, escritura solo al cambiar decisión, min-dwell |
 | 11 | MCP sin acceso a filesystem ni a `/config` | Despliegue manual/SSH | Definir procedimiento de despliegue con el usuario |

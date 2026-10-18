@@ -60,7 +60,12 @@
           "horizon_hours": "Optimization horizon",
           "step_minutes": "Optimization step",
           "optimize_interval_min": "Recompute interval",
-          "export_price_eur_kwh": "Export/remuneration price"
+          "export_price_eur_kwh": "Export/remuneration price",
+          "influx_prices_enabled": "Use InfluxDB hourly prices",
+          "influx_import_measurement": "InfluxDB import-price measurement",
+          "influx_import_field": "InfluxDB import-price field",
+          "influx_export_measurement": "InfluxDB export-price measurement",
+          "influx_export_field": "InfluxDB export-price field"
         }
       }
     },

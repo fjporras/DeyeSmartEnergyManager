@@ -41,6 +41,13 @@ CONF_EXPORT_PRICE_EUR_KWH = "export_price_eur_kwh"
 CONF_MODE = "mode"
 CONF_ENABLE_CONTROL = "enable_control"
 
+# InfluxDB hourly price source (optional; uses the influxdb config entry)
+CONF_INFLUX_PRICES_ENABLED = "influx_prices_enabled"
+CONF_INFLUX_IMPORT_MEASUREMENT = "influx_import_measurement"
+CONF_INFLUX_IMPORT_FIELD = "influx_import_field"
+CONF_INFLUX_EXPORT_MEASUREMENT = "influx_export_measurement"
+CONF_INFLUX_EXPORT_FIELD = "influx_export_field"
+
 # ---------------------------------------------------------------------------
 # Operating modes
 # ---------------------------------------------------------------------------
