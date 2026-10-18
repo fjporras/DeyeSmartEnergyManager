@@ -143,12 +143,41 @@ async def async_load_statistics(
     rows = (stats or {}).get(statistic_id) or []
     if not rows:
         return None
+    return rows_to_hourly_means(rows, _epoch_to_local_hour)
+
+
+def _epoch_to_local_hour(epoch: float) -> int:
+    """Epoch seconds -> local hour-of-day (uses HA's tz)."""
+    from homeassistant.util import dt as dt_util
+
+    return dt_util.as_local(dt_util.utc_from_timestamp(epoch)).hour
+
+
+def rows_to_hourly_means(
+    rows: list[dict], epoch_to_hour=None
+) -> dict[int, float] | None:
+    """Reduce recorder statistic rows to {hour_of_day: mean kW}.
+
+    ``epoch_to_hour`` converts epoch seconds to a local hour; defaults to
+    a UTC-based fallback for offline testing. Rows may carry ``start``
+    as a datetime (older HA) or an epoch float (HA >= 2026).
+    """
+    if epoch_to_hour is None:
+        epoch_to_hour = lambda ts: datetime.utcfromtimestamp(  # noqa: E731
+            float(ts)
+        ).hour
+
     sums: dict[int, list[float]] = {}
     for row in rows:
         mean = row.get("mean")
-        if mean is None:
+        start = row.get("start")
+        if mean is None or start is None:
             continue
-        sums.setdefault(row["start"].hour, []).append(float(mean))
+        if isinstance(start, (int, float)):
+            hour = epoch_to_hour(start)
+        else:
+            hour = start.hour
+        sums.setdefault(hour, []).append(float(mean))
     if not sums:
         return None
     # Watts -> kW if the statistic is in W (heuristic: values > 50 are W

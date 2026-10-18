@@ -3,7 +3,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from dsem.forecast import build_load_series, build_pv_series
+from dsem.forecast import (
+    build_load_series,
+    build_pv_series,
+    rows_to_hourly_means,
+)
 
 NOW = datetime(2026, 10, 18, 9, 0)
 
@@ -44,3 +48,24 @@ def test_load_series_uses_recorder_means():
     s = build_load_series(NOW, 24, hourly_means=means)
     assert s.source == "recorder_statistics"
     assert all(v == 3.0 for v in s.kw)
+
+
+def test_rows_to_hourly_means_accepts_epoch_start():
+    """Regression: HA >= 2026 returns 'start' as epoch float."""
+    epoch = datetime(2026, 10, 17, 14, 0).timestamp()
+    rows = [{"start": epoch, "mean": 2300.0},
+            {"start": epoch + 3600, "mean": 2500.0}]
+    out = rows_to_hourly_means(rows)
+    assert out is not None
+    assert abs(sum(out.values())) < 0.001 + 4.8  # W -> kW conversion
+
+
+def test_rows_to_hourly_means_accepts_datetime_start():
+    rows = [{"start": datetime(2026, 10, 17, 14, 0), "mean": 2.3}]
+    out = rows_to_hourly_means(rows)
+    assert out == {14: 2.3}
+
+
+def test_rows_to_hourly_means_empty():
+    assert rows_to_hourly_means([]) is None
+    assert rows_to_hourly_means([{"start": 1.0, "mean": None}]) is None
