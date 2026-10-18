@@ -27,7 +27,11 @@ from .const import (
     CONF_INFLUX_IMPORT_FIELD,
     CONF_INFLUX_IMPORT_MEASUREMENT,
     CONF_INFLUX_IMPORT_TAG,
+    CONF_INFLUX_ORG,
     CONF_INFLUX_TAG_KEY,
+    CONF_INFLUX_TOKEN,
+    CONF_INFLUX_URL,
+    CONF_INFLUX_VERIFY_SSL,
     DEFAULT_INFLUX_BUCKET,
     DEFAULT_INFLUX_EXPORT_FIELD,
     DEFAULT_INFLUX_EXPORT_MEASUREMENT,
@@ -77,7 +81,12 @@ class InfluxSettings:
 
 
 def get_influx_settings(hass, options: dict) -> InfluxSettings | None:
-    """Build settings from HA's own influxdb config entry + overrides."""
+    """Build settings from HA's own influxdb config entry + overrides.
+
+    When no usable influxdb entry exists, falls back to explicit
+    connection options (url/token/org) so the HA influxdb integration —
+    which only *exports* — can be removed entirely.
+    """
     base = None
     for entry in hass.config_entries.async_entries(INFLUX_DOMAIN):
         data = dict(entry.data)
@@ -85,7 +94,19 @@ def get_influx_settings(hass, options: dict) -> InfluxSettings | None:
             base = data
             break
     if base is None:
-        return None
+        url = options.get(CONF_INFLUX_URL)
+        token = options.get(CONF_INFLUX_TOKEN)
+        if not url or not token:
+            return None
+        base = {
+            "url": url,
+            "token": token,
+            "organization": options.get(CONF_INFLUX_ORG) or "",
+            "api_version": "2",
+            "verify_ssl": bool(
+                options.get(CONF_INFLUX_VERIFY_SSL, True)
+            ),
+        }
     settings = InfluxSettings(
         url=base["url"],
         token=base["token"],

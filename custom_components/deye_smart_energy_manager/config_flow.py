@@ -30,8 +30,12 @@ from .const import (
     CONF_INFLUX_IMPORT_FIELD,
     CONF_INFLUX_IMPORT_MEASUREMENT,
     CONF_INFLUX_IMPORT_TAG,
+    CONF_INFLUX_ORG,
     CONF_INFLUX_PRICES_ENABLED,
     CONF_INFLUX_TAG_KEY,
+    CONF_INFLUX_TOKEN,
+    CONF_INFLUX_URL,
+    CONF_INFLUX_VERIFY_SSL,
     CONF_LOAD_POWER_ENTITY,
     CONF_MAX_CHARGE_W,
     CONF_MAX_DISCHARGE_W,
@@ -409,6 +413,22 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                             CONF_INFLUX_BUCKET
                         ): selector.TextSelector(),
                         vol.Optional(
+                            CONF_INFLUX_URL
+                        ): selector.TextSelector(),
+                        vol.Optional(
+                            CONF_INFLUX_TOKEN
+                        ): selector.TextSelector(
+                            selector.TextSelectorConfig(
+                                type=selector.TextSelectorType.PASSWORD
+                            )
+                        ),
+                        vol.Optional(
+                            CONF_INFLUX_ORG
+                        ): selector.TextSelector(),
+                        vol.Optional(
+                            CONF_INFLUX_VERIFY_SSL
+                        ): selector.BooleanSelector(),
+                        vol.Optional(
                             CONF_INFLUX_TAG_KEY
                         ): selector.TextSelector(),
                         vol.Optional(
@@ -474,6 +494,12 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                     ),
                     CONF_INFLUX_BUCKET: options.get(
                         CONF_INFLUX_BUCKET, DEFAULT_INFLUX_BUCKET
+                    ),
+                    CONF_INFLUX_URL: options.get(CONF_INFLUX_URL, ""),
+                    CONF_INFLUX_TOKEN: options.get(CONF_INFLUX_TOKEN, ""),
+                    CONF_INFLUX_ORG: options.get(CONF_INFLUX_ORG, ""),
+                    CONF_INFLUX_VERIFY_SSL: options.get(
+                        CONF_INFLUX_VERIFY_SSL, True
                     ),
                     CONF_INFLUX_TAG_KEY: options.get(
                         CONF_INFLUX_TAG_KEY, DEFAULT_INFLUX_TAG_KEY
