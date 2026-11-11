@@ -42,6 +42,7 @@ CONF_OPTIMIZE_INTERVAL_MIN = "optimize_interval_min"
 CONF_EXPORT_PRICE_EUR_KWH = "export_price_eur_kwh"
 CONF_MODE = "mode"
 CONF_ENABLE_CONTROL = "enable_control"
+CONF_GRID_CHARGE_SWITCH_ENTITY = "grid_charge_switch_entity"
 CONF_LOAD_PROFILE_QUANTILE = "load_profile_quantile"
 
 # InfluxDB hourly price source (optional; uses the influxdb config entry)
@@ -122,6 +123,9 @@ DEFAULT_ENERGY_IMPORT_ENTITY = (
 )
 DEFAULT_ENERGY_EXPORT_ENTITY = (
     "sensor.deye_sun_15k_sg05lp3_eu_sm2_total_energy_export"
+)
+DEFAULT_GRID_CHARGE_SWITCH_ENTITY = (
+    "switch.deye_sun_15k_sg05lp3_eu_sm2_battery_grid_charging"
 )
 # EV charger (dé EV Charger via tuya_local — no power sensor; power is
 # estimated as charge_current_A x EV_VOLTAGE when state == charging)

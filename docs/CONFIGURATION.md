@@ -93,6 +93,27 @@ Las series usadas quedan visibles en los atributos de
 | Opción | Default | Efecto |
 |---|---|---|
 | `mode` | `shadow` | Modo inicial obligatorio |
+| `enable_control` | `false` | Habilita modos ejecutores; sin él, `select.dsem_mode` rechaza `auto`/`economic`/`solar_priority`/`backup`/`target_soc` |
+| `grid_charge_switch_entity` | `switch.deye_…_battery_grid_charging` | Interruptor que escribe el ejecutor (acción `charge_grid` → on; resto → off) |
+
+#### Ejecutor v1 (`control.py`)
+
+Con `enable_control` activo y un modo ejecutor, el coordinator traduce
+la acción del slot actual a **una única escritura**: el interruptor
+`battery_grid_charging` del Deye (permiso de carga desde red — el
+inversor sigue decidiendo potencia y tiempos). No escribe nada más.
+
+Interlocks: plan disponible + snapshot completo sin entidades
+missing/stale + gracia de 5 min tras arranque + mínimo 10 min entre
+escrituras + verificación leyendo el estado + 3 fallos seguidos →
+backoff 30 min + notificación persistente. El estado queda en
+`plan_meta.control` (`control_ok:on`, `control_written:off`,
+`control_backoff`, …) y se notifica una vez al activar.
+
+⚠️ **Conflicto conocido**: `automation.pvpc_carga_bateria_deye_en_horas_baratas`
+actúa sobre el mismo interruptor en las 4 h PVPC más baratas. Con el
+control de DSEM activo hay que desactivarla — si no, ambas pelean por
+el switch cada hora.
 
 ### Modo `target_soc` — objetivo SOC programado
 
@@ -113,7 +134,6 @@ contiene `time.deye_smart_energy_manager_hora_objetivo` con un SOC
 Las dos entidades son propias de DSEM (number + time), restauran su
 valor tras reinicio y son controlables desde cualquier tarjeta
 (entities/number card) de Paneles, Inicio o el dashboard DSEM.
-| `enable_control` | `false` | Habilita modos ejecutores; sin él, `select.dsem_mode` rechaza `auto`/`economic`/`solar_priority`/`backup` |
 
 ## 3. Vehículo eléctrico y ACS
 

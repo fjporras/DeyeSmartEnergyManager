@@ -24,6 +24,7 @@ from .const import (
     CONF_EV_STATE_ENTITY,
     CONF_EXPORT_PRICE_EUR_KWH,
     CONF_GRID_POWER_ENTITY,
+    CONF_GRID_CHARGE_SWITCH_ENTITY,
     CONF_HORIZON_HOURS,
     CONF_INFLUX_BUCKET,
     CONF_INFLUX_EXPORT_FIELD,
@@ -65,6 +66,7 @@ from .const import (
     DEFAULT_EV_CURRENT_ENTITY,
     DEFAULT_EV_STATE_ENTITY,
     DEFAULT_EXPORT_PRICE_EUR_KWH,
+    DEFAULT_GRID_CHARGE_SWITCH_ENTITY,
     DEFAULT_GRID_POWER_ENTITY,
     DEFAULT_HORIZON_HOURS,
     DEFAULT_INFLUX_BUCKET,
@@ -295,6 +297,7 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                 return self.async_create_entry(data=user_input)
         options = {
             CONF_LOAD_PROFILE_QUANTILE: DEFAULT_LOAD_PROFILE_QUANTILE,
+            CONF_GRID_CHARGE_SWITCH_ENTITY: DEFAULT_GRID_CHARGE_SWITCH_ENTITY,
             **self.config_entry.options,
         }
         return self.async_show_form(
@@ -310,6 +313,11 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                             )
                         ),
                         vol.Required(CONF_ENABLE_CONTROL): selector.BooleanSelector(),
+                        vol.Optional(
+                            CONF_GRID_CHARGE_SWITCH_ENTITY
+                        ): selector.EntitySelector(
+                            selector.EntitySelectorConfig(domain="switch")
+                        ),
                         vol.Required(CONF_BATTERY_USABLE_KWH): selector.NumberSelector(
                             selector.NumberSelectorConfig(
                                 min=1,

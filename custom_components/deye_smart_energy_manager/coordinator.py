@@ -110,6 +110,13 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
         self.plan: EnergyPlan | None = None
         self.plan_meta: dict[str, str] = {}
         self._last_plan_log: str | None = None
+        # Control executor state (control.py)
+        self._control_ready_at = dt_util.now() + timedelta(
+            seconds=300
+        )
+        self._control_last_write: datetime | None = None
+        self._control_backoff_until: datetime | None = None
+        self._control_failures = 0
 
     # -- public properties -------------------------------------------------
 
@@ -472,6 +479,13 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
         self.plan = await self._async_build_plan(snapshot)
         if self.plan is not None:
             await self._async_log_plan(self.plan)
+        from .control import async_apply_control
+
+        control_state = await async_apply_control(
+            self.hass, self._entry, self, snapshot
+        )
+        if control_state:
+            self.plan_meta["control"] = control_state
         return snapshot
 
     async def _async_log_plan(self, plan: EnergyPlan) -> None:
