@@ -94,7 +94,8 @@
         "solar_priority": "Prioridad solar",
         "economic": "Económico",
         "backup": "Reserva",
-        "auto": "Auto (ejecuta)"
+        "auto": "Auto (ejecuta)",
+        "target_soc": "Objetivo SOC (restricción)"
       }
     }
   },
@@ -141,8 +142,19 @@
           "solar_priority": "Prioridad solar",
           "economic": "Económico",
           "backup": "Reserva",
-          "auto": "Auto"
+          "auto": "Auto",
+          "target_soc": "SOC objetivo"
         }
+      }
+    },
+    "number": {
+      "target_soc": {
+        "name": "SOC objetivo"
+      }
+    },
+    "time": {
+      "target_time": {
+        "name": "Hora objetivo"
       }
     }
   },

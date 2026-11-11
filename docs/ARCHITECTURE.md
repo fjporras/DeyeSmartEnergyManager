@@ -70,6 +70,7 @@
 | `solar_priority` | Optimiza maximizando autoconsumo | ✅ si `enable_control` |
 | `economic` | Optimiza por mínimo coste | ✅ si `enable_control` |
 | `backup` | Mantiene reserva SOC configurable | ✅ si `enable_control` |
+| `target_soc` | Objetivo SOC a una hora: precarga en horas baratas / FV, suelo de trayectoria que bloquea descargas por debajo de lo necesario | ✅ si `enable_control` |
 | `auto` | Optimizador + ejecución verificada | ✅ si `enable_control` |
 
 `enable_control` es una option no trivial (boolean + confirmación). Cambiar a

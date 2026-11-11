@@ -51,6 +51,8 @@ from .const import (
     DEFAULT_MAX_CHARGE_W,
     DEFAULT_MAX_DISCHARGE_W,
     DEFAULT_MODE,
+    DEFAULT_TARGET_TIME,
+    MODE_TARGET_SOC,
     DEFAULT_RESERVE_SOC_PCT,
     DEFAULT_SOC_MAX_PCT,
     DEFAULT_SOC_MIN_PCT,
@@ -70,6 +72,7 @@ from .influx import async_query_hourly_prices, get_influx_settings
 from .model import EnergyPlan, EnergySnapshot
 from .optimizer import BatteryParams, PlannerInput, optimize
 from .prices import build_price_series, series_from_points
+from .targets import KEY_SOC, KEY_TIME, target_slot_index, target_store
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -341,6 +344,31 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
             self.plan_meta["price_missing_hours"] = str(
                 sum(1 for p in import_prices if p is None)
             )
+            target_soc_pct: float | None = None
+            target_idx: int | None = None
+            target_warn: str | None = None
+            if self.mode == MODE_TARGET_SOC:
+                store = target_store(self.hass, self._entry.entry_id)
+                try:
+                    target_soc_pct = float(store.get(KEY_SOC, 0.0))
+                except (TypeError, ValueError):
+                    target_soc_pct = None
+                hhmm = str(store.get(KEY_TIME, DEFAULT_TARGET_TIME))
+                self.plan_meta["soc_target_pct"] = (
+                    f"{target_soc_pct:g}" if target_soc_pct else "unset"
+                )
+                self.plan_meta["soc_target_time"] = hhmm
+                if target_soc_pct and target_soc_pct > 0:
+                    target_idx = target_slot_index(
+                        price_series.first_hour, horizon, hhmm, now
+                    )
+                    self.plan_meta["soc_target_slot"] = (
+                        str(target_idx) if target_idx is not None else "none"
+                    )
+                    if target_idx is None:
+                        target_warn = "soc_target_out_of_horizon"
+                else:
+                    target_warn = "soc_target_not_configured"
             plan = optimize(
                 PlannerInput(
                     first_hour=price_series.first_hour,
@@ -355,8 +383,14 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
                     load_kw=load.kw,
                     battery=battery,
                     export_prices=export_prices,
+                    soc_target_pct=target_soc_pct,
+                    target_idx=target_idx,
                 )
             )
+            if target_warn:
+                plan = replace(
+                    plan, warnings=plan.warnings + (target_warn,)
+                )
             if soc is None:
                 plan = replace(
                     plan, warnings=plan.warnings + ("soc_unknown",)

@@ -27,6 +27,18 @@ views:
               sensor.deye_smart_energy_manager_proxima_accion_del_plan
             name: Acción en curso / próxima
 
+      - type: entities
+        title: Objetivo SOC (modo target_soc)
+        entities:
+          - entity: number.deye_smart_energy_manager_soc_objetivo
+            name: SOC objetivo (%)
+          - entity: time.deye_smart_energy_manager_hora_objetivo
+            name: Hora objetivo
+        visibility:
+          - condition: state
+            entity: select.deye_smart_energy_manager_modo
+            state_not: target_soc
+
       - type: horizontal-stack
         cards:
           - type: gauge
@@ -69,6 +81,9 @@ views:
           | Carga | {{ a.load_source }} |
           | FV | {{ a.pv_source }} |
           | Horas sin precio | {{ a.price_missing_hours }} |
+          {%- if a.soc_target_pct is defined and a.soc_target_pct != 'unset' %}
+          | Objetivo SOC | {{ a.soc_target_pct }}% a las {{ a.soc_target_time }} (slot {{ a.soc_target_slot }}) |
+          {%- endif %}
           | Warnings | {{ a.warnings | join(', ') if a.warnings else '—' }} |
           {%- else -%}
           Plan no disponible (warnings: {{ a.warnings | join(', ') if a.warnings else '—' }})

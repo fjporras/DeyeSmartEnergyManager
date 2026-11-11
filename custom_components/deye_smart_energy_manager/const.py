@@ -79,6 +79,7 @@ MODE_SHADOW = "shadow"
 MODE_SOLAR_PRIORITY = "solar_priority"
 MODE_ECONOMIC = "economic"
 MODE_BACKUP = "backup"
+MODE_TARGET_SOC = "target_soc"
 MODE_MANUAL = "manual"
 MODE_SAFE = "safe"
 
@@ -89,12 +90,14 @@ MODES: tuple[str, ...] = (
     MODE_SOLAR_PRIORITY,
     MODE_ECONOMIC,
     MODE_BACKUP,
+    MODE_TARGET_SOC,
     MODE_AUTO,
 )
 
 # Modes allowed to issue control orders (still require CONF_ENABLE_CONTROL)
 CONTROL_MODES: frozenset[str] = frozenset(
-    {MODE_AUTO, MODE_SOLAR_PRIORITY, MODE_ECONOMIC, MODE_BACKUP}
+    {MODE_AUTO, MODE_SOLAR_PRIORITY, MODE_ECONOMIC, MODE_BACKUP,
+     MODE_TARGET_SOC}
 )
 
 DEFAULT_MODE = MODE_SHADOW
@@ -150,3 +153,7 @@ DEFAULT_LOAD_PROFILE_QUANTILE = 0.70
 # Coordinator
 UPDATE_INTERVAL_S = 60
 MAX_SNAPSHOT_AGE_S = 900
+
+# SOC-target mode entities (runtime store in hass.data, see targets.py)
+DEFAULT_TARGET_SOC_PCT = 80.0
+DEFAULT_TARGET_TIME = "07:00"

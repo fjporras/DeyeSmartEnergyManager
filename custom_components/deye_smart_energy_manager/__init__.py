@@ -12,7 +12,12 @@ from .coordinator import DsemCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SELECT]
+PLATFORMS: list[Platform] = [
+    Platform.SENSOR,
+    Platform.SELECT,
+    Platform.NUMBER,
+    Platform.TIME,
+]
 
 DsemConfigEntry = ConfigEntry[DsemCoordinator]
 

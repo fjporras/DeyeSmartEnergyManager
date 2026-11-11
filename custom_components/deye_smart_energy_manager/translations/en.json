@@ -94,7 +94,8 @@
         "solar_priority": "Solar priority",
         "economic": "Economic",
         "backup": "Backup",
-        "auto": "Auto (executes)"
+        "auto": "Auto (executes)",
+        "target_soc": "Target SOC (constraint)"
       }
     }
   },
@@ -141,8 +142,19 @@
           "solar_priority": "Solar priority",
           "economic": "Economic",
           "backup": "Backup",
-          "auto": "Auto"
+          "auto": "Auto",
+          "target_soc": "Target SOC"
         }
+      }
+    },
+    "number": {
+      "target_soc": {
+        "name": "Target SOC"
+      }
+    },
+    "time": {
+      "target_time": {
+        "name": "Target time"
       }
     }
   },

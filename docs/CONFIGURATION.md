@@ -93,6 +93,26 @@ Las series usadas quedan visibles en los atributos de
 | Opción | Default | Efecto |
 |---|---|---|
 | `mode` | `shadow` | Modo inicial obligatorio |
+
+### Modo `target_soc` — objetivo SOC programado
+
+Cuando el modo es `target_soc`, el plan debe terminar la hora que
+contiene `time.deye_smart_energy_manager_hora_objetivo` con un SOC
+≥ `number.deye_smart_energy_manager_soc_objetivo` (%). El optimizador:
+
+- Precarga en las horas más baratas antes del objetivo, cubriendo solo
+  lo que la FV prevista no va a aportar (`soc_target_precharge`).
+- Mantiene un **suelo de trayectoria**: no permite descargas que dejen
+  el SOC por debajo de lo necesario para alcanzar el objetivo
+  (capacidad de carga garantizada restante por hora).
+- Avisa con `soc_target_not_reached`, `soc_target_not_configured` o
+  `soc_target_out_of_horizon` si el objetivo no es viable.
+- En `shadow` solo calcula el plan; la ejecución requeriría
+  `enable_control` igual que el resto de modos ejecutores.
+
+Las dos entidades son propias de DSEM (number + time), restauran su
+valor tras reinicio y son controlables desde cualquier tarjeta
+(entities/number card) de Paneles, Inicio o el dashboard DSEM.
 | `enable_control` | `false` | Habilita modos ejecutores; sin él, `select.dsem_mode` rechaza `auto`/`economic`/`solar_priority`/`backup` |
 
 ## 3. Vehículo eléctrico y ACS
