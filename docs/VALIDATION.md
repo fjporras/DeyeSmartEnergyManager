@@ -143,6 +143,12 @@ La meta del plan expone ahora `pv_bias`, `pv_realized_today_kwh`,
 `nowcast_kw`, `ev_state`, `ev_power_w`, `load_quantile` para
 verificación continua en el dashboard.
 
-Pendientes de una iteración futura: persistencia del plan para
-validación automática T+24 h, perfil por día-tipo, buffer ~2 ptos
-sobre la reserva, e integración del horario `ss/se` del cargador.
+Pendientes de una iteración futura: perfil por día-tipo, buffer ~2
+puntos sobre la reserva, e integración del horario `ss/se` del
+cargador.
+
+**Persistencia implementada**: cada hora el coordinator añade una
+línea JSON a `config/deye_smart_energy_manager/plan_log.jsonl`
+(rotación a ~2 MB) con los 24 slots (acción, W batería, W red, SOC,
+precio) y la meta. A partir de su despliegue se podrá comparar el
+plan previsto vs los datos reales a T+24 h automáticamente.

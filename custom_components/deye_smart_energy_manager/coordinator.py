@@ -106,6 +106,7 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
         self._entry = entry
         self.plan: EnergyPlan | None = None
         self.plan_meta: dict[str, str] = {}
+        self._last_plan_log: str | None = None
 
     # -- public properties -------------------------------------------------
 
@@ -435,4 +436,57 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
         if missing:
             _LOGGER.debug("DSEM snapshot incomplete, missing: %s", missing)
         self.plan = await self._async_build_plan(snapshot)
+        if self.plan is not None:
+            await self._async_log_plan(self.plan)
         return snapshot
+
+    async def _async_log_plan(self, plan: EnergyPlan) -> None:
+        """Persist one plan snapshot per hour for SHADOW validation.
+
+        Recorder history keeps entity states but NOT attributes, so the
+        hourly slots would be lost. This appends a compact JSON line to
+        ``config/deye_smart_energy_manager/plan_log.jsonl`` (once per
+        hour, keyed by plan start) so predictions can be compared with
+        real data at T+24h. Never raises; capped file growth is handled
+        by rotation when the log exceeds ~2 MB.
+        """
+        key = plan.slots[0].start.isoformat() if plan.slots else None
+        if key is None or key == self._last_plan_log:
+            return
+        self._last_plan_log = key
+        import json
+        record = {
+            "logged_at": dt_util.now().isoformat(),
+            "horizon_hours": plan.horizon_hours,
+            "expected_cost_eur": plan.expected_cost_eur,
+            "baseline_cost_eur": plan.baseline_cost_eur,
+            "meta": dict(self.plan_meta),
+            "slots": [
+                {
+                    "t": s.start.isoformat(),
+                    "a": s.action,
+                    "bw": round(s.battery_power_w),
+                    "gw": round(s.grid_power_w),
+                    "soc": round(s.soc_end_pct, 1),
+                    "p": s.import_price_eur_kwh,
+                }
+                for s in plan.slots
+            ],
+        }
+        try:
+            path = self.hass.config.path(DOMAIN, "plan_log.jsonl")
+            await self.hass.async_add_executor_job(self._append_plan_line, path, record)
+        except Exception as err:  # noqa: BLE001 - logging must not break updates
+            _LOGGER.debug("DSEM plan log write failed: %s", err)
+
+    @staticmethod
+    def _append_plan_line(path: str, record: dict) -> None:
+        """Append one JSON line, rotating the file beyond ~2 MB."""
+        import json
+        import os
+
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if os.path.exists(path) and os.path.getsize(path) > 2_000_000:
+            os.replace(path, path + ".1")
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
