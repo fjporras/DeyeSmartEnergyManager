@@ -112,12 +112,37 @@ Prioridad por impacto:
 7. **Export**: sin cambios funcionales (no hay exportación real hoy);
    mantener la serie por si aparece VE/ACS.
 
-### Datos pendientes de confirmar con el usuario
+### Datos confirmados por el usuario
 
-- ¿Las cargas intermitentes de 14-21 h (hasta 4.5 kW) son el **VE**?
-  Si lo son, la estrategia correcta no es mejorar el perfil medio sino
-  integrar una entidad del VE como carga controlable (fase VE).
-- ¿El límite de carga del inversor (~4 kW) es configuración del Deye o
-  una limitación del BMS?
-- La carga base nocturna ~2 kW — si es equipamiento siempre-encendido,
-  es correcto; conviene saberlo para no tratarla como anomalía.
+- Los picos de 14-21 h son **carga del VE** — integrado vía
+  `tuya_local` (`dé EV Charger`): `sensor.de_ev_charger_estado`,
+  `number.de_ev_charger_charge_current`, `number.de_ev_charger_maximum_current`,
+  `text.de_ev_charger_charge_mode` (horario ss/se). No hay sensor de
+  potencia → estimación `A x 230 V` solo en estado `charging`.
+- La base ~2 kW permanente son **servidores** — modelada como suelo
+  del perfil (`min(profile)`), no como anomalía.
+- Límite de carga del inversor (~4 kW observado): pendiente de
+  confirmar si es configuración Deye o límite BMS.
+
+## 7. Ajustes implementados (commit posterior a la validación)
+
+| Ajuste | Implementación |
+|---|---|
+| Sesgo FV | `pv_bias()` compara la energía real del día (stats del
+sensor de potencia FV) con la fracción de campana ya transcurrida;
+acotado [0.5, 1.5], aplicado al total diario restante y mañana. |
+| Carga | P70 por hora (`load_profile_quantile` configurable
+0.5-0.95), nowcast = residual de las últimas 3 h con decaimiento
+0.6^i durante 6 h, y boost VE `max(perfil, base + P_EV)` durante
+4 h si el cargador reporta `charging`. |
+| Batería | `usable_kwh` 30→**33**, `soc_min` 20→**30**, `max_charge`
+5300→**4500**, `max_discharge` 6300→**4000** (medias horarias
+reales -4.06/+3.25 kW; los defaults van algo por encima). |
+
+La meta del plan expone ahora `pv_bias`, `pv_realized_today_kwh`,
+`nowcast_kw`, `ev_state`, `ev_power_w`, `load_quantile` para
+verificación continua en el dashboard.
+
+Pendientes de una iteración futura: persistencia del plan para
+validación automática T+24 h, perfil por día-tipo, buffer ~2 ptos
+sobre la reserva, e integración del horario `ss/se` del cargador.

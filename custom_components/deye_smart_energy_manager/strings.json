@@ -23,14 +23,16 @@
       },
       "optional": {
         "title": "Optional entities",
-        "description": "Leave empty to disable the related feature. EV and water-heater features stay inactive until real entities exist.",
+        "description": "Leave empty to disable the related feature. The EV charger boosts the load forecast while its state reports charging.",
         "data": {
           "pv_forecast_entity": "PV forecast — energy today",
           "pv_forecast_tomorrow_entity": "PV forecast — energy tomorrow",
           "pv_peak_today_entity": "PV forecast — peak time today",
           "pv_peak_tomorrow_entity": "PV forecast — peak time tomorrow",
           "energy_import_entity": "Grid import energy counter",
-          "energy_export_entity": "Grid export energy counter"
+          "energy_export_entity": "Grid export energy counter",
+          "ev_state_entity": "EV charger — state",
+          "ev_charge_current_entity": "EV charger — charge current"
         },
         "data_description": {
           "pv_forecast_entity": "e.g. forecast_solar energy_production_today (kWh)",
@@ -38,7 +40,9 @@
           "pv_peak_today_entity": "timestamp sensor; improves the hourly PV curve",
           "pv_peak_tomorrow_entity": "timestamp sensor; improves the hourly PV curve",
           "energy_import_entity": "total_increasing energy sensor (kWh)",
-          "energy_export_entity": "total_increasing energy sensor (kWh)"
+          "energy_export_entity": "total_increasing energy sensor (kWh)",
+          "ev_state_entity": "e.g. sensor.de_ev_charger_estado (tuya_local)",
+          "ev_charge_current_entity": "number entity in A; power estimated as A x 230 V"
         }
       }
     },
@@ -81,7 +85,8 @@
           "influx_import_tag": "InfluxDB import-price tag value",
           "influx_export_measurement": "InfluxDB export-price measurement",
           "influx_export_field": "InfluxDB export-price field",
-          "influx_export_tag": "InfluxDB export-price tag value"
+          "influx_export_tag": "InfluxDB export-price tag value",
+          "load_profile_quantile": "Load profile quantile (0.5-0.95)"
         },
         "data_description": {
           "enable_control": "Required before selecting auto/economic/solar_priority/backup. Kept off after restarts.",
@@ -121,8 +126,12 @@
   },
   "entity": {
     "sensor": {
-      "optimization_status": { "name": "Optimization status" },
-      "current_strategy": { "name": "Current strategy" },
+      "optimization_status": {
+        "name": "Optimization status"
+      },
+      "current_strategy": {
+        "name": "Current strategy"
+      },
       "plan_next_action": {
         "name": "Plan next action",
         "state": {
@@ -135,10 +144,18 @@
           "hold": "Holding reserve"
         }
       },
-      "grid_power": { "name": "Grid power" },
-      "pv_power": { "name": "PV power" },
-      "battery_power": { "name": "Battery power" },
-      "battery_soc": { "name": "Battery SOC" }
+      "grid_power": {
+        "name": "Grid power"
+      },
+      "pv_power": {
+        "name": "PV power"
+      },
+      "battery_power": {
+        "name": "Battery power"
+      },
+      "battery_soc": {
+        "name": "Battery SOC"
+      }
     },
     "select": {
       "mode": {

@@ -23,14 +23,16 @@
       },
       "optional": {
         "title": "Entidades opcionales",
-        "description": "Deja vacío para desactivar la función correspondiente. VE y termo permanecen inactivos hasta que existan entidades reales.",
+        "description": "Deja vacío para desactivar la función. El cargador VE eleva la previsión de carga mientras su estado sea «charging».",
         "data": {
           "pv_forecast_entity": "Previsión FV — energía de hoy",
           "pv_forecast_tomorrow_entity": "Previsión FV — energía de mañana",
           "pv_peak_today_entity": "Previsión FV — hora del pico de hoy",
           "pv_peak_tomorrow_entity": "Previsión FV — hora del pico de mañana",
           "energy_import_entity": "Contador de energía importada",
-          "energy_export_entity": "Contador de energía exportada"
+          "energy_export_entity": "Contador de energía exportada",
+          "ev_state_entity": "Cargador VE — estado",
+          "ev_charge_current_entity": "Cargador VE — corriente de carga"
         }
       }
     },
@@ -73,7 +75,8 @@
           "influx_import_tag": "Valor del tag de consumo",
           "influx_export_measurement": "Measurement de precio de vertido",
           "influx_export_field": "Field de precio de vertido",
-          "influx_export_tag": "Valor del tag de vertido"
+          "influx_export_tag": "Valor del tag de vertido",
+          "load_profile_quantile": "Cuantil del perfil de carga (0,5-0,95)"
         }
       }
     },
@@ -97,8 +100,12 @@
   },
   "entity": {
     "sensor": {
-      "optimization_status": { "name": "Estado del optimizador" },
-      "current_strategy": { "name": "Estrategia actual" },
+      "optimization_status": {
+        "name": "Estado del optimizador"
+      },
+      "current_strategy": {
+        "name": "Estrategia actual"
+      },
       "plan_next_action": {
         "name": "Próxima acción del plan",
         "state": {
@@ -111,10 +118,18 @@
           "hold": "Reservando batería"
         }
       },
-      "grid_power": { "name": "Potencia de red" },
-      "pv_power": { "name": "Potencia FV" },
-      "battery_power": { "name": "Potencia de batería" },
-      "battery_soc": { "name": "SOC de batería" }
+      "grid_power": {
+        "name": "Potencia de red"
+      },
+      "pv_power": {
+        "name": "Potencia FV"
+      },
+      "battery_power": {
+        "name": "Potencia de batería"
+      },
+      "battery_soc": {
+        "name": "SOC de batería"
+      }
     },
     "select": {
       "mode": {

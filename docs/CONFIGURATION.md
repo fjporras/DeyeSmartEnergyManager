@@ -30,7 +30,9 @@ auditados en `docs/ENTITY_AUDIT.md`. Todos son modificables.
 | `pv_peak_tomorrow_entity` | `sensor.power_highest_peak_time_tomorrow` | Ídem mañana |
 | `energy_import_entity` | `sensor.deye_…_total_energy_import` | Contador kWh (economía) |
 | `energy_export_entity` | `sensor.deye_…_total_energy_export` | Contador kWh exportación |
-| `ev_*` / `acs_*` | *(vacío)* | Inactivos — no hay VE ni termo en la instalación |
+| `ev_state_entity` | `sensor.de_ev_charger_estado` | Estado del cargador VE (tuya_local); `charging` activa el boost de carga |
+| `ev_charge_current_entity` | `number.de_ev_charger_charge_current` | Corriente VE en A; potencia estimada = A × 230 V |
+| `acs_*` | *(vacío)* | Inactivo — no hay termo instrumentado |
 
 Validación en el flujo: la entidad existe, está disponible y su unidad es
 compatible. Los errores se muestran por campo.
@@ -41,12 +43,12 @@ compatible. Los errores se muestran por campo.
 
 | Opción | Default | Notas |
 |---|---|---|
-| `battery_usable_kwh` | 30.0 | ⚠️ pendiente de validación empírica (BMS 439 Ah / config 628 Ah / estimador 36,1 kWh) |
-| `soc_min_pct` | 20 | Por encima del `shutdown_soc` del inversor (15 %) |
-| `soc_max_pct` | 95 | |
-| `reserve_soc_pct` | 35 | Reserva modo `backup` |
-| `max_charge_w` | 5300 | = `battery_max_charging_current` 100 A × ~53 V |
-| `max_discharge_w` | 6300 | = 120 A × ~53 V |
+| `battery_usable_kwh` | 33.0 | Calibrado: ~33 kWh/100 % SOC en 7 días de stats reales |
+| `soc_min_pct` | 30 | El suelo real del inversor es 35 %; 30 da margen bajo la reserva |
+| `soc_max_pct` | 95 | Máximos reales observados 94-96 % |
+| `reserve_soc_pct` | 35 | Reserva modo `backup`; coincide con el suelo real |
+| `max_charge_w` | 4500 | Observado −4.06 kW pico horario (el límite teórico 5.3 kW no se alcanza) |
+| `max_discharge_w` | 4000 | Observado +3.25 kW pico horario (teórico 6.3 kW no se alcanza) |
 | `charge_efficiency` | 0.95 | |
 | `discharge_efficiency` | 0.95 | |
 | `degradation_eur_kwh` | 0.02 | Coste de ciclo estimado |
@@ -58,6 +60,7 @@ compatible. Los errores se muestran por campo.
 | `horizon_hours` | 24 |
 | `step_minutes` | 60 |
 | `optimize_interval_min` | 15 |
+| `load_profile_quantile` | 0.70 | Cuantil del perfil horario de carga (P70 cubre picos de VE sin diluirlos) |
 | `export_price_eur_kwh` | 0.14 (fallback si no hay serie horaria de vertido) |
 | `price_fallback` | `conservative` |
 
@@ -92,13 +95,21 @@ Las series usadas quedan visibles en los atributos de
 | `mode` | `shadow` | Modo inicial obligatorio |
 | `enable_control` | `false` | Habilita modos ejecutores; sin él, `select.dsem_mode` rechaza `auto`/`economic`/`solar_priority`/`backup` |
 
-## 3. Funciones deshabilitadas por ausencia de entidades
+## 3. Vehículo eléctrico y ACS
 
-- **Vehículo eléctrico:** no hay cargador ni entidades de VE (CASA-GOMEZ es un móvil).
-- **ACS/termo:** sin entidades `water_heater`/`climate` ni medida dedicada.
+- **Vehículo eléctrico (integrado, solo lectura):** cargador `dé EV
+  Charger` vía `tuya_local`. DSEM lee `ev_state_entity` y
+  `ev_charge_current_entity`; mientras el estado sea `charging`, el
+  perfil de carga garantiza `max(perfil, base + corriente × 230 V)`
+  durante las próximas 4 h (`load_source` queda `+ev_live`). Es una
+  **estimación** — el cargador no expone sensor de potencia — y se
+  reporta en `plan_meta.ev_power_w`. Los botones charge/stop del
+  cargador **no se usan** mientras DSEM esté en SHADOW.
+- **ACS/termo:** sin entidades `water_heater`/`climate` ni medida
+  dedicada — pendiente.
 
-Cuando existan integraciones reales, se habilitarán añadiendo sus entity_ids
-en options — sin reinstalar DSEM.
+La base de ~2 kW permanente (servidores) queda cubierta por el suelo
+del perfil (`min(profile)`), no por el boost VE.
 
 ## 4. Entidades propias creadas
 

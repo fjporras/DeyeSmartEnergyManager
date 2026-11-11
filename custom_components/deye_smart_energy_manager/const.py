@@ -21,6 +21,8 @@ CONF_PV_PEAK_TODAY_ENTITY = "pv_peak_today_entity"
 CONF_PV_PEAK_TOMORROW_ENTITY = "pv_peak_tomorrow_entity"
 CONF_ENERGY_IMPORT_ENTITY = "energy_import_entity"
 CONF_ENERGY_EXPORT_ENTITY = "energy_export_entity"
+CONF_EV_STATE_ENTITY = "ev_state_entity"
+CONF_EV_CURRENT_ENTITY = "ev_charge_current_entity"
 
 # ---------------------------------------------------------------------------
 # Options keys (physical/optimizer parameters)
@@ -40,6 +42,7 @@ CONF_OPTIMIZE_INTERVAL_MIN = "optimize_interval_min"
 CONF_EXPORT_PRICE_EUR_KWH = "export_price_eur_kwh"
 CONF_MODE = "mode"
 CONF_ENABLE_CONTROL = "enable_control"
+CONF_LOAD_PROFILE_QUANTILE = "load_profile_quantile"
 
 # InfluxDB hourly price source (optional; uses the influxdb config entry)
 CONF_INFLUX_PRICES_ENABLED = "influx_prices_enabled"
@@ -117,16 +120,24 @@ DEFAULT_ENERGY_IMPORT_ENTITY = (
 DEFAULT_ENERGY_EXPORT_ENTITY = (
     "sensor.deye_sun_15k_sg05lp3_eu_sm2_total_energy_export"
 )
+# EV charger (dé EV Charger via tuya_local — no power sensor; power is
+# estimated as charge_current_A x EV_VOLTAGE when state == charging)
+DEFAULT_EV_STATE_ENTITY = "sensor.de_ev_charger_estado"
+DEFAULT_EV_CURRENT_ENTITY = "number.de_ev_charger_charge_current"
+DEFAULT_EV_VOLTAGE = 230.0
 
 # ---------------------------------------------------------------------------
 # Parameter defaults (see docs/CONFIGURATION.md)
 # ---------------------------------------------------------------------------
-DEFAULT_BATTERY_USABLE_KWH = 30.0
-DEFAULT_SOC_MIN_PCT = 20.0
+# Calibrated against 7 days of real statistics (docs/VALIDATION.md):
+# usable ~33 kWh/100% SOC, real SOC floor 35%, observed charge
+# -4.1 kW / discharge +3.3 kW hourly means.
+DEFAULT_BATTERY_USABLE_KWH = 33.0
+DEFAULT_SOC_MIN_PCT = 30.0
 DEFAULT_SOC_MAX_PCT = 95.0
 DEFAULT_RESERVE_SOC_PCT = 35.0
-DEFAULT_MAX_CHARGE_W = 5300.0
-DEFAULT_MAX_DISCHARGE_W = 6300.0
+DEFAULT_MAX_CHARGE_W = 4500.0
+DEFAULT_MAX_DISCHARGE_W = 4000.0
 DEFAULT_CHARGE_EFFICIENCY = 0.95
 DEFAULT_DISCHARGE_EFFICIENCY = 0.95
 DEFAULT_DEGRADATION_EUR_KWH = 0.02
@@ -134,6 +145,7 @@ DEFAULT_HORIZON_HOURS = 24
 DEFAULT_STEP_MINUTES = 60
 DEFAULT_OPTIMIZE_INTERVAL_MIN = 15
 DEFAULT_EXPORT_PRICE_EUR_KWH = 0.14
+DEFAULT_LOAD_PROFILE_QUANTILE = 0.70
 
 # Coordinator
 UPDATE_INTERVAL_S = 60

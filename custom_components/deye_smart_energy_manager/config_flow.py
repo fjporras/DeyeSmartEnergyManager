@@ -20,6 +20,8 @@ from .const import (
     CONF_ENABLE_CONTROL,
     CONF_ENERGY_EXPORT_ENTITY,
     CONF_ENERGY_IMPORT_ENTITY,
+    CONF_EV_CURRENT_ENTITY,
+    CONF_EV_STATE_ENTITY,
     CONF_EXPORT_PRICE_EUR_KWH,
     CONF_GRID_POWER_ENTITY,
     CONF_HORIZON_HOURS,
@@ -37,6 +39,7 @@ from .const import (
     CONF_INFLUX_URL,
     CONF_INFLUX_VERIFY_SSL,
     CONF_LOAD_POWER_ENTITY,
+    CONF_LOAD_PROFILE_QUANTILE,
     CONF_MAX_CHARGE_W,
     CONF_MAX_DISCHARGE_W,
     CONF_MODE,
@@ -59,6 +62,8 @@ from .const import (
     DEFAULT_DISCHARGE_EFFICIENCY,
     DEFAULT_ENERGY_EXPORT_ENTITY,
     DEFAULT_ENERGY_IMPORT_ENTITY,
+    DEFAULT_EV_CURRENT_ENTITY,
+    DEFAULT_EV_STATE_ENTITY,
     DEFAULT_EXPORT_PRICE_EUR_KWH,
     DEFAULT_GRID_POWER_ENTITY,
     DEFAULT_HORIZON_HOURS,
@@ -71,6 +76,7 @@ from .const import (
     DEFAULT_INFLUX_IMPORT_TAG,
     DEFAULT_INFLUX_TAG_KEY,
     DEFAULT_LOAD_POWER_ENTITY,
+    DEFAULT_LOAD_PROFILE_QUANTILE,
     DEFAULT_MAX_CHARGE_W,
     DEFAULT_MAX_DISCHARGE_W,
     DEFAULT_MODE,
@@ -198,6 +204,8 @@ class DsemConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_PV_PEAK_TOMORROW_ENTITY: set(),
                 CONF_ENERGY_IMPORT_ENTITY: _ENERGY_UNITS,
                 CONF_ENERGY_EXPORT_ENTITY: _ENERGY_UNITS,
+                CONF_EV_STATE_ENTITY: set(),
+                CONF_EV_CURRENT_ENTITY: set(),
             }
             data: dict[str, Any] = dict(self._required)
             for key, units in checks.items():
@@ -239,6 +247,12 @@ class DsemConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         vol.Optional(CONF_ENERGY_EXPORT_ENTITY): selector.EntitySelector(
                             selector.EntitySelectorConfig(domain="sensor")
                         ),
+                        vol.Optional(CONF_EV_STATE_ENTITY): selector.EntitySelector(
+                            selector.EntitySelectorConfig(domain="sensor")
+                        ),
+                        vol.Optional(CONF_EV_CURRENT_ENTITY): selector.EntitySelector(
+                            selector.EntitySelectorConfig(domain="number")
+                        ),
                     }
                 ),
                 {
@@ -248,6 +262,8 @@ class DsemConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_PV_PEAK_TOMORROW_ENTITY: DEFAULT_PV_PEAK_TOMORROW_ENTITY,
                     CONF_ENERGY_IMPORT_ENTITY: DEFAULT_ENERGY_IMPORT_ENTITY,
                     CONF_ENERGY_EXPORT_ENTITY: DEFAULT_ENERGY_EXPORT_ENTITY,
+                    CONF_EV_STATE_ENTITY: DEFAULT_EV_STATE_ENTITY,
+                    CONF_EV_CURRENT_ENTITY: DEFAULT_EV_CURRENT_ENTITY,
                 },
             ),
             errors=errors,
@@ -277,7 +293,10 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                 errors[CONF_RESERVE_SOC_PCT] = "reserve_below_min"
             if not errors:
                 return self.async_create_entry(data=user_input)
-        options = self.config_entry.options
+        options = {
+            CONF_LOAD_PROFILE_QUANTILE: DEFAULT_LOAD_PROFILE_QUANTILE,
+            **self.config_entry.options,
+        }
         return self.async_show_form(
             step_id="init",
             data_schema=self.add_suggested_values_to_schema(
@@ -395,6 +414,16 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                                 step=5,
                                 mode=selector.NumberSelectorMode.BOX,
                                 unit_of_measurement="min",
+                            )
+                        ),
+                        vol.Required(
+                            CONF_LOAD_PROFILE_QUANTILE
+                        ): selector.NumberSelector(
+                            selector.NumberSelectorConfig(
+                                min=0.5,
+                                max=0.95,
+                                step=0.05,
+                                mode=selector.NumberSelectorMode.BOX,
                             )
                         ),
                         vol.Required(CONF_EXPORT_PRICE_EUR_KWH): selector.NumberSelector(

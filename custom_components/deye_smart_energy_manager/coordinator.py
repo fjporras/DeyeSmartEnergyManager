@@ -20,11 +20,14 @@ from .const import (
     CONF_ENABLE_CONTROL,
     CONF_ENERGY_EXPORT_ENTITY,
     CONF_ENERGY_IMPORT_ENTITY,
+    CONF_EV_CURRENT_ENTITY,
+    CONF_EV_STATE_ENTITY,
     CONF_EXPORT_PRICE_EUR_KWH,
     CONF_GRID_POWER_ENTITY,
     CONF_HORIZON_HOURS,
     CONF_INFLUX_PRICES_ENABLED,
     CONF_LOAD_POWER_ENTITY,
+    CONF_LOAD_PROFILE_QUANTILE,
     CONF_MAX_CHARGE_W,
     CONF_MAX_DISCHARGE_W,
     CONF_MODE,
@@ -42,7 +45,9 @@ from .const import (
     DEFAULT_DEGRADATION_EUR_KWH,
     DEFAULT_DISCHARGE_EFFICIENCY,
     DEFAULT_EXPORT_PRICE_EUR_KWH,
+    DEFAULT_EV_VOLTAGE,
     DEFAULT_HORIZON_HOURS,
+    DEFAULT_LOAD_PROFILE_QUANTILE,
     DEFAULT_MAX_CHARGE_W,
     DEFAULT_MAX_DISCHARGE_W,
     DEFAULT_MODE,
@@ -55,8 +60,11 @@ from .const import (
 )
 from .forecast import (
     async_load_statistics,
+    async_pv_realized_kwh,
+    async_recent_load_residual,
     build_load_series,
     build_pv_series,
+    pv_bias,
 )
 from .influx import async_query_hourly_prices, get_influx_settings
 from .model import EnergyPlan, EnergySnapshot
@@ -159,6 +167,36 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
             return None
         return dt_util.parse_datetime(state.state)
 
+    def _ev_state(self, entity_id: str | None) -> str | None:
+        """Raw EV charger state string (tuya_local, e.g. idle/charging)."""
+        if not entity_id:
+            return None
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state.lower() in _UNAVAIL:
+            return None
+        return state.state
+
+    def _ev_power_w(
+        self, state_entity: str | None, current_entity: str | None
+    ) -> float | None:
+        """Estimated EV charge power in W.
+
+        The dé EV Charger (tuya_local) exposes no power sensor; power is
+        estimated as charge_current_A x 230 V, only while the charger
+        reports an active session. Returns 0 when idle — the estimate is
+        clearly labelled in plan_meta (not a measurement).
+        """
+        state = self._ev_state(state_entity)
+        if state is None:
+            return None
+        if state.lower() not in ("charging", "charge", "cargando"):
+            return 0.0
+        missing: list[str] = []
+        amps = self._float(current_entity, missing)
+        if amps is None or amps <= 0:
+            return None
+        return amps * DEFAULT_EV_VOLTAGE
+
     # -- planning -----------------------------------------------------------
 
     async def _async_build_plan(
@@ -182,23 +220,65 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
                 now,
                 horizon,
             )
-            load_means = await async_load_statistics(
-                self.hass, data.get(CONF_LOAD_POWER_ENTITY)
+            load_quantile = float(
+                opts.get(
+                    CONF_LOAD_PROFILE_QUANTILE, DEFAULT_LOAD_PROFILE_QUANTILE
+                )
             )
-            load = build_load_series(now, horizon, load_means)
+            load_means = await async_load_statistics(
+                self.hass,
+                data.get(CONF_LOAD_POWER_ENTITY),
+                quantile=load_quantile,
+            )
+            nowcast = await async_recent_load_residual(
+                self.hass, data.get(CONF_LOAD_POWER_ENTITY), load_means
+            )
+            ev_boost_kw = (
+                snapshot.ev_power_w / 1000.0 if snapshot.ev_power_w else 0.0
+            )
+            load = build_load_series(
+                now,
+                horizon,
+                load_means,
+                nowcast_kw=nowcast,
+                ev_boost_kw=ev_boost_kw,
+            )
+            peak_today = self._datetime(data.get(CONF_PV_PEAK_TODAY_ENTITY))
+            realized = await async_pv_realized_kwh(
+                self.hass, data.get(CONF_PV_POWER_ENTITY)
+            )
+            bias = pv_bias(
+                snapshot.pv_forecast_today_kwh,
+                realized or 0.0,
+                now,
+                peak_today,
+            )
             pv = build_pv_series(
                 now,
                 horizon,
                 snapshot.pv_forecast_today_kwh,
                 snapshot.pv_forecast_tomorrow_kwh,
-                self._datetime(data.get(CONF_PV_PEAK_TODAY_ENTITY)),
+                peak_today,
                 self._datetime(data.get(CONF_PV_PEAK_TOMORROW_ENTITY)),
+                bias=bias,
             )
             import_prices = price_series.prices
             export_prices = None
             self.plan_meta = {
                 "load_source": load.source,
+                "load_quantile": str(load_quantile),
+                "nowcast_kw": f"{nowcast:.2f}",
                 "pv_source": pv.source,
+                "pv_bias": f"{bias:.2f}",
+                "pv_realized_today_kwh": (
+                    f"{realized:.1f}" if realized is not None else "none"
+                ),
+                "ev_state": snapshot.ev_state or "none",
+                "ev_power_w": (
+                    f"{snapshot.ev_power_w:.0f}"
+                    if snapshot.ev_power_w is not None
+                    else "none"
+                ),
                 "price_source": "pvpc",
                 "price_missing_hours": str(price_series.missing_hours),
             }
@@ -343,6 +423,11 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
             ),
             energy_export_today_kwh=self._float(
                 data.get(CONF_ENERGY_EXPORT_ENTITY), missing
+            ),
+            ev_state=self._ev_state(data.get(CONF_EV_STATE_ENTITY)),
+            ev_power_w=self._ev_power_w(
+                data.get(CONF_EV_STATE_ENTITY),
+                data.get(CONF_EV_CURRENT_ENTITY),
             ),
             missing_entities=tuple(missing),
             stale_entities=tuple(stale),

@@ -28,6 +28,8 @@ class EnergySnapshot:
     pv_forecast_tomorrow_kwh: float | None = None
     energy_import_today_kwh: float | None = None
     energy_export_today_kwh: float | None = None
+    ev_state: str | None = None
+    ev_power_w: float | None = None
     missing_entities: tuple[str, ...] = field(default_factory=tuple)
     stale_entities: tuple[str, ...] = field(default_factory=tuple)
 
