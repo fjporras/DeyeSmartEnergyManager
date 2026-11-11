@@ -28,16 +28,28 @@ views:
             name: Acción en curso / próxima
 
       - type: entities
-        title: Objetivo SOC (modo target_soc)
+        title: Control y objetivo SOC
         entities:
+          - entity: select.deye_smart_energy_manager_modo
+            name: Modo
           - entity: number.deye_smart_energy_manager_soc_objetivo
             name: SOC objetivo (%)
           - entity: time.deye_smart_energy_manager_hora_objetivo
             name: Hora objetivo
+          - entity: >-
+              switch.deye_sun_15k_sg05lp3_eu_sm2_battery_grid_charging
+            name: Carga de red (físico)
         visibility:
           - condition: state
             entity: select.deye_smart_energy_manager_modo
-            state_not: target_soc
+            state_not: shadow
+
+      - type: button
+        name: Reoptimizar ahora
+        icon: mdi:refresh
+        tap_action:
+          action: call-service
+          service: deye_smart_energy_manager.reoptimize
 
       - type: horizontal-stack
         cards:
@@ -83,6 +95,9 @@ views:
           | Horas sin precio | {{ a.price_missing_hours }} |
           {%- if a.soc_target_pct is defined and a.soc_target_pct != 'unset' %}
           | Objetivo SOC | {{ a.soc_target_pct }}% a las {{ a.soc_target_time }} (slot {{ a.soc_target_slot }}) |
+          {%- endif %}
+          {%- if a.control is defined %}
+          | Control | {{ a.control }} |
           {%- endif %}
           | Warnings | {{ a.warnings | join(', ') if a.warnings else '—' }} |
           {%- else -%}
