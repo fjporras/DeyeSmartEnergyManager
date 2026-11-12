@@ -85,6 +85,11 @@ _REQUIRED = (
     CONF_PRICE_IMPORT_ENTITY,
 )
 
+# Entities that update hourly or slower legitimately (price sensors
+# refresh once per REE publication). They still count as "missing" when
+# absent, but their age must not gate physical control writes.
+_STALE_EXEMPT = frozenset({CONF_PRICE_IMPORT_ENTITY})
+
 _UNAVAIL = ("unavailable", "unknown", "none", "")
 
 
@@ -438,7 +443,8 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
         stale: list[str] = []
 
         for key in _REQUIRED:
-            self._stale(data.get(key), stale)
+            if key not in _STALE_EXEMPT:
+                self._stale(data.get(key), stale)
 
         snapshot = EnergySnapshot(
             timestamp=dt_util.utcnow(),
