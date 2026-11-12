@@ -75,7 +75,12 @@ from .model import EnergyPlan, EnergySnapshot
 from .optimizer import BatteryParams, PlannerInput, optimize
 from .prices import build_price_series, series_from_points
 from .targets import KEY_SOC, KEY_TIME, target_slot_index, target_store
-from .tou import grid_charge_allowed_hours, program_windows, source_at
+from .tou import (
+    active_program_index,
+    grid_charge_allowed_hours,
+    program_windows,
+    source_at,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -449,24 +454,40 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
                 )
                 for i in range(1, 7)
             ]
+            socs = [
+                self.hass.states.get(
+                    f"number.{prefix}_program_{i}_soc"
+                )
+                for i in range(1, 7)
+            ]
             if not any(s is not None for s in states_sel + times):
                 return {"tou_status": "unavailable"}
+            time_vals = [t.state if t is not None else None for t in times]
             windows = program_windows(
                 [s.state if s is not None else None for s in states_sel],
-                [t.state if t is not None else None for t in times],
+                time_vals,
             )
             if not windows:
                 return {"tou_status": "unavailable"}
             allowed = grid_charge_allowed_hours(windows, first_hour, horizon)
             now = dt_util.now()
-            src_now = source_at(windows, now.hour * 60 + now.minute)
-            return {
+            minute = now.hour * 60 + now.minute
+            src_now = source_at(windows, minute)
+            meta = {
                 "tou_status": "ok",
                 "tou_now": src_now or "unknown",
                 "tou_grid_blocked_hours": str(
                     sum(1 for a in allowed if not a)
                 ),
             }
+            # Per-program SOC target: the inverter stops charging at this
+            # level inside the window — a hidden cap for target_soc mode.
+            idx = active_program_index(time_vals, minute)
+            if idx is not None and idx < len(socs):
+                st = socs[idx]
+                if st is not None and st.state not in _UNAVAIL:
+                    meta["tou_now_soc"] = st.state
+            return meta
         except Exception:  # noqa: BLE001 - diagnostics must not break plans
             return {"tou_status": "error"}
 

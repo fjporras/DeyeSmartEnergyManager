@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from dsem.tou import (
+    active_program_index,
     grid_charge_allowed_hours,
     program_windows,
     source_at,
@@ -53,6 +54,15 @@ def test_both_counts_as_grid_source():
         windows, datetime(2026, 11, 12, 3, 0), 2
     )
     assert all(allowed)
+
+
+def test_active_program_index_wraps():
+    # 00:30 -> program 6 (index 5, started 21:00); 12:00 -> program 3
+    # (index 2, started 09:00); 23:00 -> program 6.
+    assert active_program_index(TIMES, 30) == 5
+    assert active_program_index(TIMES, 720) == 2
+    assert active_program_index(TIMES, 1380) == 5
+    assert active_program_index([None] * 6, 100) is None
 
 
 def test_invalid_entries_dropped():

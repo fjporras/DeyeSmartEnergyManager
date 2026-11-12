@@ -117,20 +117,25 @@ el switch cada hora.
 
 ### Programas TOU del inversor (time-of-use)
 
-El Deye tiene 6 programas horarios (`program_1..6_charging` +
-`program_1..6_time`) que limitan desde qué fuente puede cargar la
-batería en cada ventana de 4 h (`Disabled`/`Grid`/`Generator`/`Both`).
+El Deye tiene 6 programas horarios que en cada ventana de 4 h definen
+tres cosas: fuente de carga (`program_N_charging`:
+`Disabled`/`Grid`/`Generator`/`Both`), **SOC objetivo**
+(`program_N_soc`) y potencia (`program_N_power`). El inversor **deja de
+cargar al alcanzar el SOC del programa activo** — un límite oculto que
+puede hacer fracasar un `target_soc` aunque el switch esté ON (caso
+real: programa de 17–21 h con SOC 70 % clavó la batería en 70 %).
 
-**Recomendado**: abrir el TOU a carga desde red en todas las ventanas
-(`Both` o `Grid` en los 6 programas) para que el switch
-`battery_grid_charging` sea la única superficie de control y el plan de
-DSEM sea siempre ejecutable.
+**Recomendado**: para que el switch `battery_grid_charging` sea la
+única superficie de control, poner los programas que puedan coincidir
+con ventanas de carga a fuente `Both`/`Grid` y SOC objetivo alto
+(100 % o el `soc_max` configurado).
 
 DSEM **lee** los programas en cada ciclo (deriva los entity IDs del
 prefijo del switch de carga desde red) y expone en `plan_meta`:
 
 - `tou_status`: `ok` / `unavailable` / `error`
 - `tou_now`: fuente de carga de la ventana actual (`grid`, `disabled`…)
+- `tou_now_soc`: SOC objetivo del programa activo (si la entidad existe)
 - `tou_grid_blocked_hours`: horas del horizonte donde el TOU no permite
   carga desde red
 

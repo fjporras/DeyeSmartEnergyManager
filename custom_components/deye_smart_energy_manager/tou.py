@@ -57,6 +57,32 @@ def source_at(windows: list[tuple[int, str]], minute_of_day: int) -> str | None:
     return source
 
 
+def active_program_index(
+    program_times: list[str | None], minute_of_day: int
+) -> int | None:
+    """0-based index of the program governing ``minute_of_day``.
+
+    Programs wrap past midnight: minutes before the first program start
+    belong to the last program of the day (same rule as ``source_at``).
+    """
+    starts: list[tuple[int, int]] = []
+    for i, hhmm in enumerate(program_times):
+        if hhmm is None:
+            continue
+        try:
+            hh, mm = (int(p) for p in hhmm.split(":")[:2])
+        except (ValueError, AttributeError):
+            continue
+        if 0 <= hh <= 23 and 0 <= mm <= 59:
+            starts.append((hh * 60 + mm, i))
+    if not starts:
+        return None
+    eligible = [s for s in starts if s[0] <= minute_of_day]
+    if eligible:
+        return max(eligible)[1]
+    return max(starts)[1]
+
+
 def grid_charge_allowed_hours(
     windows: list[tuple[int, str]],
     first_hour: datetime,
