@@ -23,6 +23,7 @@ from .const import (
     CONF_EV_CURRENT_ENTITY,
     CONF_EV_STATE_ENTITY,
     CONF_EXPORT_PRICE_EUR_KWH,
+    CONF_GRID_CHARGE_SWITCH_ENTITY,
     CONF_GRID_POWER_ENTITY,
     CONF_HORIZON_HOURS,
     CONF_INFLUX_PRICES_ENABLED,
@@ -41,6 +42,7 @@ from .const import (
     CONF_SOC_MAX_PCT,
     CONF_SOC_MIN_PCT,
     DEFAULT_BATTERY_USABLE_KWH,
+    DEFAULT_GRID_CHARGE_SWITCH_ENTITY,
     DEFAULT_CHARGE_EFFICIENCY,
     DEFAULT_DEGRADATION_EUR_KWH,
     DEFAULT_DISCHARGE_EFFICIENCY,
@@ -73,6 +75,7 @@ from .model import EnergyPlan, EnergySnapshot
 from .optimizer import BatteryParams, PlannerInput, optimize
 from .prices import build_price_series, series_from_points
 from .targets import KEY_SOC, KEY_TIME, target_slot_index, target_store
+from .tou import grid_charge_allowed_hours, program_windows, source_at
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -315,6 +318,9 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
                         self.plan_meta["price_source"] = "influxdb"
                     if any(v is not None for v in exp):
                         export_prices = exp
+            self.plan_meta.update(
+                self._tou_diagnostics(price_series.first_hour, horizon)
+            )
             soc = snapshot.battery_soc_pct
             reserve = float(
                 opts.get(CONF_RESERVE_SOC_PCT, DEFAULT_RESERVE_SOC_PCT)
@@ -412,6 +418,57 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
             _LOGGER.warning("DSEM plan computation failed: %s", err)
             self.plan_meta = {}
             return None
+
+    def _tou_diagnostics(
+        self, first_hour: datetime, horizon: int
+    ) -> dict[str, str]:
+        """Read the inverter TOU charge programs (diagnostics only).
+
+        Derives the entity prefix from the configured grid-charge switch
+        (``switch.<prefix>_battery_grid_charging``) and reads the six
+        ``program_N_charging``/``program_N_time`` pairs. Never raises.
+        """
+        try:
+            switch = self._entry.options.get(
+                CONF_GRID_CHARGE_SWITCH_ENTITY,
+                DEFAULT_GRID_CHARGE_SWITCH_ENTITY,
+            )
+            prefix = switch.split(".", 1)[-1]
+            suffix = "_battery_grid_charging"
+            if prefix.endswith(suffix):
+                prefix = prefix[: -len(suffix)]
+            states_sel = [
+                self.hass.states.get(
+                    f"select.{prefix}_program_{i}_charging"
+                )
+                for i in range(1, 7)
+            ]
+            times = [
+                self.hass.states.get(
+                    f"time.{prefix}_program_{i}_time"
+                )
+                for i in range(1, 7)
+            ]
+            if not any(s is not None for s in states_sel + times):
+                return {"tou_status": "unavailable"}
+            windows = program_windows(
+                [s.state if s is not None else None for s in states_sel],
+                [t.state if t is not None else None for t in times],
+            )
+            if not windows:
+                return {"tou_status": "unavailable"}
+            allowed = grid_charge_allowed_hours(windows, first_hour, horizon)
+            now = dt_util.now()
+            src_now = source_at(windows, now.hour * 60 + now.minute)
+            return {
+                "tou_status": "ok",
+                "tou_now": src_now or "unknown",
+                "tou_grid_blocked_hours": str(
+                    sum(1 for a in allowed if not a)
+                ),
+            }
+        except Exception:  # noqa: BLE001 - diagnostics must not break plans
+            return {"tou_status": "error"}
 
     async def _async_influx_prices(
         self, now: datetime, horizon: int, first_hour: datetime

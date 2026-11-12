@@ -115,6 +115,29 @@ actúa sobre el mismo interruptor en las 4 h PVPC más baratas. Con el
 control de DSEM activo hay que desactivarla — si no, ambas pelean por
 el switch cada hora.
 
+### Programas TOU del inversor (time-of-use)
+
+El Deye tiene 6 programas horarios (`program_1..6_charging` +
+`program_1..6_time`) que limitan desde qué fuente puede cargar la
+batería en cada ventana de 4 h (`Disabled`/`Grid`/`Generator`/`Both`).
+
+**Recomendado**: abrir el TOU a carga desde red en todas las ventanas
+(`Both` o `Grid` en los 6 programas) para que el switch
+`battery_grid_charging` sea la única superficie de control y el plan de
+DSEM sea siempre ejecutable.
+
+DSEM **lee** los programas en cada ciclo (deriva los entity IDs del
+prefijo del switch de carga desde red) y expone en `plan_meta`:
+
+- `tou_status`: `ok` / `unavailable` / `error`
+- `tou_now`: fuente de carga de la ventana actual (`grid`, `disabled`…)
+- `tou_grid_blocked_hours`: horas del horizonte donde el TOU no permite
+  carga desde red
+
+Es solo diagnóstico: el plan **no** se restringe por el TOU. Si el TOU
+bloquea la ventana que el plan necesita, el síntoma es que el switch
+está ON pero `battery_power` no muestra carga.
+
 ### Modo `target_soc` — objetivo SOC programado
 
 Cuando el modo es `target_soc`, el plan debe terminar la hora que
