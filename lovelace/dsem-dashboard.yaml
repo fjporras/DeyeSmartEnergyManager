@@ -190,10 +190,10 @@ views:
             'cheap_hour_no_headroom': 'hora barata sin margen',
             'balanced': 'equilibrado'} %}
           {%- if slots %}
-          | Día | Hora | Acción | Bat W | Red W | SOC | €/kWh | Motivo |
-          |---|---|---|---|---|---|---|---|
+          | Hora | Acción | Bat/Red W | SOC | €/kWh | Motivo |
+          |---|---|---|---|---|---|
           {%- for s in slots %}
-          | {{ s.t[8:10] }}/{{ s.t[5:7] }} | {{ s.t[11:16] }} | {{ amap.get(s.action, s.action) }} | {{ s.batt_w | round(0) }} | {{ s.grid_w | round(0) }} | {{ s.soc_end | round(0) }}% | {{ s.eur_kwh if s.eur_kwh is not none else '—' }} | {{ rmap.get(s.why, s.why) }} |
+          | {{ s.t[8:10] }}/{{ s.t[5:7] }} {{ s.t[11:16] }} | {{ amap.get(s.action, s.action) }} | {{ '%+d/%+d' % (s.batt_w | round(0), s.grid_w | round(0)) }} | {{ s.soc_end | round(0) }}% | {{ s.eur_kwh | round(3) if s.eur_kwh is not none else '—' }} | {{ rmap.get(s.why, s.why) }} |
           {%- endfor %}
 
           *convención: bat W <0 carga / >0 descarga · red W >0 importa / <0 exporta*
