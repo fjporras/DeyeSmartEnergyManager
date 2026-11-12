@@ -196,6 +196,27 @@ def test_soc_target_uses_pv_surplus():
     assert "soc_target_not_reached" not in plan.warnings
 
 
+def test_soc_target_forces_charge_at_mid_prices():
+    """When cheap hours cannot cover the target, mid-price hours before
+    the deadline must grid-charge the shortfall — cheapest first."""
+    # Cheap hours 0-1 and 8-14 keep the global P25 at 0.05, but before
+    # the hour-7 deadline only two cheap hours exist; mid-price hours
+    # 2-6 must cover the shortfall via forced charging.
+    prices = (
+        [0.05, 0.05] + [0.20] * 6 + [0.05] * 7 + [0.35] * 9
+    )
+    plan = optimize(_target_input(7, 90.0, prices=prices))
+    assert "soc_target_not_reached" not in plan.warnings
+    assert plan.slots[7].soc_end_pct >= 89.5
+    mid_charges = [
+        s for s in plan.slots[:7]
+        if s.action == model.ACTION_CHARGE_GRID and s.start.hour >= 2
+    ]
+    assert mid_charges
+    assert all(s.reason == "soc_target_forced_charge"
+               for s in mid_charges)
+
+
 def test_soc_target_above_soc_max_clamps_and_warns():
     plan = optimize(_target_input(8, 99.0))
     # 99% > soc_max 95% -> clamped, still reachable at 95.

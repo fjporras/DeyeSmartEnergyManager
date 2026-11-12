@@ -139,15 +139,18 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
         for j in range(target_idx, -1, -1):
             pv_suf[j] = pv_suf[j + 1] + pv_st[j]
         rate = max_chg_kw * bat.charge_efficiency  # stored kWh per hour
-        # Guaranteed stored kWh addable per hour: full rate only in cheap
-        # grid hours; otherwise just the PV surplus that will be stored.
+        # Guaranteed stored kWh addable per hour: every deficit hour can
+        # grid-charge if needed (target mode buys at the cheapest
+        # available prices before the deadline, not only P25 hours);
+        # surplus hours contribute just their PV storage.
         charge_cap = [0.0] * n
         for j in range(target_idx + 1):
-            p = prices[j] if j < len(prices) else None
-            if p is not None and p != _UNKNOWN and p <= cheap_thr:
-                charge_cap[j] = rate
-            else:
+            pv_j = inp.pv_kw[j] if j < len(inp.pv_kw) else 0.0
+            load_j = inp.load_kw[j] if j < len(inp.load_kw) else 0.0
+            if pv_j - load_j > 0.0:
                 charge_cap[j] = pv_st[j]
+            else:
+                charge_cap[j] = rate
         cap_suf = [0.0] * (n + 1)
         for j in range(target_idx, -1, -1):
             cap_suf[j] = cap_suf[j + 1] + charge_cap[j]
@@ -210,19 +213,44 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
                 and i <= target_idx
                 and tneed > 0.01
             )
-            if price is not None and price <= cheap_thr and (
-                fut_deficit[i + 1] > 0 or want_target
-            ):
+            cheap_ok = (
+                price is not None
+                and price <= cheap_thr
+                and (fut_deficit[i + 1] > 0 or want_target)
+            )
+            # Forced target charge: buy now only the stored energy that
+            # strictly-cheaper deficit hours before the deadline cannot
+            # deliver. This schedules grid charging into the cheapest
+            # available hours even when they are above the P25 threshold.
+            forced_chg = 0.0
+            if want_target and price is not None and not cheap_ok:
+                cheaper_cap = 0.0
+                for j in range(i + 1, target_idx + 1):
+                    pj = prices[j] if j < len(prices) else None
+                    if pj is None or pj == _UNKNOWN or pj >= price:
+                        continue
+                    pv_j = inp.pv_kw[j] if j < len(inp.pv_kw) else 0.0
+                    load_j = inp.load_kw[j] if j < len(inp.load_kw) else 0.0
+                    if pv_j - load_j <= 0.0:
+                        cheaper_cap += rate
+                if tneed > cheaper_cap:
+                    forced_chg = (tneed - cheaper_cap) / bat.charge_efficiency
+            if cheap_ok or forced_chg > 0.0:
                 # Cheap hour with expensive deficits ahead or an unmet
                 # SOC target: cover the deficit from grid AND pre-charge.
                 want = cap_res + fut_deficit[i + 1] / bat.discharge_efficiency
-                if want_target:
+                if want_target and cheap_ok:
                     want = max(want, soc_kwh + tneed)
+                elif forced_chg > 0.0:
+                    want = max(want, soc_kwh + forced_chg
+                               * bat.charge_efficiency)
                 headroom = max(0.0, min(cap_max, want) - soc_kwh) \
                     / bat.charge_efficiency
                 chg = min(bat.max_charge_w / 1000.0, headroom)
-                if want_target:
+                if want_target and cheap_ok:
                     chg = min(chg, tneed / bat.charge_efficiency)
+                elif forced_chg > 0.0:
+                    chg = min(chg, forced_chg)
                 if chg > 0.01:
                     soc_kwh += chg * bat.charge_efficiency
                     batt_w = -chg * 1000.0
@@ -230,6 +258,8 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
                     reason = (
                         "soc_target_precharge"
                         if want_target and fut_deficit[i + 1] <= 0
+                        else "soc_target_forced_charge"
+                        if forced_chg > 0.0 and not cheap_ok
                         else "cheap_hour_precharge"
                     )
                 else:

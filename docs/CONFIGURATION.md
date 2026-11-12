@@ -123,6 +123,12 @@ contiene `time.deye_smart_energy_manager_hora_objetivo` con un SOC
 
 - Precarga en las horas más baratas antes del objetivo, cubriendo solo
   lo que la FV prevista no va a aportar (`soc_target_precharge`).
+- **Carga forzada**: si las horas baratas (P25) no bastan, compra en las
+  horas de precio medio/siguiente más barato antes de la hora límite —
+  solo el déficit que las horas más baratas futuras no pueden cubrir
+  (`soc_target_forced_charge`). El objetivo se alcanza aunque los
+  precios no sean los mejores del día; `soc_target_not_reached` solo
+  aparece cuando es físicamente inviable (capacidad/ventana).
 - Mantiene un **suelo de trayectoria**: no permite descargas que dejen
   el SOC por debajo de lo necesario para alcanzar el objetivo
   (capacidad de carga garantizada restante por hora).
