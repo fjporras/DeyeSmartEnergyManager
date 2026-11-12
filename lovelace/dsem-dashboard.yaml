@@ -82,26 +82,72 @@ views:
           {% set a =
             states.sensor.deye_smart_energy_manager_proxima_accion_del_plan.attributes
           %}
+          {% set wtxt =
+            ((a.warnings | default([])) | join(', ') if a.warnings else '—')
+            | replace('soc_target_not_reached', 'objetivo SOC inalcanzable')
+            | replace('soc_target_not_configured', 'objetivo SOC sin configurar')
+            | replace('soc_target_out_of_horizon', 'objetivo fuera del horizonte')
+            | replace('soc_target_above_soc_max', 'objetivo supera SOC máx')
+            | replace('soc_unknown', 'SOC desconocido')
+            | replace('no_price_data', 'sin datos de precio')
+            | replace('price_gaps_filled', 'huecos de precio rellenados')
+            | replace('battery_capacity_unknown', 'capacidad batería desconocida')
+            | replace('invalid_soc_range', 'rango SOC inválido')
+            | replace('reserve_below_min', 'reserva bajo el mínimo')
+          %}
+          {% set ctxt =
+            (a.control | default('—'))
+            | replace('control_ok:on', 'correcto (permiso ON)')
+            | replace('control_ok:off', 'correcto (permiso OFF)')
+            | replace('control_written:on', 'escrito ON')
+            | replace('control_written:off', 'escrito OFF')
+            | replace('control_disabled_option', 'desactivado (opción)')
+            | replace('control_backoff', 'en espera (backoff)')
+            | replace('control_startup_grace', 'arranque')
+            | replace('control_unsafe_data', 'datos no seguros')
+            | replace('control_no_plan', 'sin plan')
+            | replace('control_rate_limited', 'limitado por intervalo')
+            | replace('control_write_failed_backoff', 'fallo escritura + espera')
+            | replace('control_write_failed', 'fallo escritura')
+            | replace('control_switch_unavailable', 'interruptor no disponible')
+            | replace('control_error', 'error')
+          %}
+          {% set ls = a.load_source | default('') %}
+          {% set ps = a.pv_source | default('') %}
+          {% set ltxt =
+            'perfil horario'
+            ~ (' + nowcast' if 'nowcast' in ls else '')
+            ~ (' + VE' if 'ev_live' in ls else '')
+          %}
+          {% set ptxt =
+            'Forecast.Solar' if 'forecast_solar' in ps
+            else ('estadísticas' if 'statistics' in ps else ps)
+          %}
+          {% set tou_txt =
+            {'grid': 'red', 'both': 'FV + red', 'disabled': 'desactivada',
+             'generator': 'generador', 'unknown': '—'}.get(a.tou_now | default('—'), a.tou_now | default('—'))
+          %}
           {%- if a.plan_available %}
           | Métrica | Valor |
           |---|---|
           | Coste esperado | {{ '%.2f' % a.expected_cost_eur }} € |
-          | Coste baseline | {{ '%.2f' % a.baseline_cost_eur }} € |
+          | Coste sin optimizar | {{ '%.2f' % a.baseline_cost_eur }} € |
           | **Ahorro estimado** | **{{ '%.2f' % a.expected_savings_eur }} €** |
-          | Precios | {{ a.price_source }} ({{ a.import_series }}) |
-          | Vertido | {{ a.export_series }} |
-          | Carga | {{ a.load_source }} |
-          | FV | {{ a.pv_source }} |
+          | Precios | {{ 'InfluxDB/REE' if a.price_source == 'influxdb' else 'PVPC' }} ({{ a.import_series | replace('electricity_price.precio_kwh[tipo=consumo]', 'consumo') }}) |
+          | Vertido | {{ a.export_series | replace('electricity_price.precio_kwh[tipo=excedentes]', 'vertido') }} |
+          | Carga prevista | {{ ltxt }} |
+          | FV prevista | {{ ptxt }} |
           | Horas sin precio | {{ a.price_missing_hours }} |
+          | Ventana TOU | {{ tou_txt }}{% if a.tou_now_soc is defined %} (SOC máx {{ a.tou_now_soc }}%){% endif %} |
           {%- if a.soc_target_pct is defined and a.soc_target_pct != 'unset' %}
-          | Objetivo SOC | {{ a.soc_target_pct }}% a las {{ a.soc_target_time }} (slot {{ a.soc_target_slot }}) |
+          | Objetivo SOC | {{ a.soc_target_pct }}% a las {{ a.soc_target_time }} (hora {{ a.soc_target_slot }}) |
           {%- endif %}
           {%- if a.control is defined %}
-          | Control | {{ a.control }} |
+          | Control | {{ ctxt }} |
           {%- endif %}
-          | Warnings | {{ a.warnings | join(', ') if a.warnings else '—' }} |
+          | Avisos | {{ wtxt }} |
           {%- else -%}
-          Plan no disponible (warnings: {{ a.warnings | join(', ') if a.warnings else '—' }})
+          Plan no disponible (avisos: {{ wtxt }})
           {%- endif %}
 
       - type: history-graph
@@ -127,11 +173,27 @@ views:
           {% set slots =
             state_attr('sensor.deye_smart_energy_manager_proxima_accion_del_plan',
             'slots') or [] %}
+          {%- set amap = {
+            'charge_pv': 'cargar FV', 'charge_grid': 'cargar red',
+            'discharge': 'descargar', 'import': 'importar',
+            'export': 'exportar', 'hold': 'retener', 'idle': 'reposo',
+            'balanced': 'equilibrado'} %}
+          {%- set rmap = {
+            'pv_surplus': 'excedente FV',
+            'pv_surplus_battery_full': 'excedente FV (batería llena)',
+            'cheap_hour_precharge': 'hora barata: precarga',
+            'soc_target_precharge': 'objetivo SOC: precarga',
+            'soc_target_forced_charge': 'objetivo SOC: carga forzada',
+            'expensive_deficit': 'déficit en hora cara',
+            'mid_price_import': 'importación precio medio',
+            'reserve_hold': 'retención por reserva',
+            'cheap_hour_no_headroom': 'hora barata sin margen',
+            'balanced': 'equilibrado'} %}
           {%- if slots %}
           | Día | Hora | Acción | Bat W | Red W | SOC | €/kWh | Motivo |
           |---|---|---|---|---|---|---|---|
           {%- for s in slots %}
-          | {{ s.t[8:10] }}/{{ s.t[5:7] }} | {{ s.t[11:16] }} | {{ s.action }} | {{ s.batt_w | round(0) }} | {{ s.grid_w | round(0) }} | {{ s.soc_end | round(0) }}% | {{ s.eur_kwh if s.eur_kwh is not none else '—' }} | {{ s.why }} |
+          | {{ s.t[8:10] }}/{{ s.t[5:7] }} | {{ s.t[11:16] }} | {{ amap.get(s.action, s.action) }} | {{ s.batt_w | round(0) }} | {{ s.grid_w | round(0) }} | {{ s.soc_end | round(0) }}% | {{ s.eur_kwh if s.eur_kwh is not none else '—' }} | {{ rmap.get(s.why, s.why) }} |
           {%- endfor %}
 
           *convención: bat W <0 carga / >0 descarga · red W >0 importa / <0 exporta*
