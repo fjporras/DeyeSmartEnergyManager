@@ -24,7 +24,6 @@ from .model import (
     ACTION_CHARGE_PV,
     ACTION_DISCHARGE,
     ACTION_EXPORT,
-    ACTION_HOLD,
     ACTION_IDLE,
     ACTION_IMPORT,
     EnergyPlan,
@@ -50,6 +49,7 @@ class BatteryParams:
     charge_efficiency: float       # AC -> stored
     discharge_efficiency: float    # stored -> AC
     degradation_eur_kwh: float
+    auto_floor_pct: float = 15.0    # physical cutoff for autonomous discharge
 
 
 @dataclass(frozen=True)
@@ -108,17 +108,15 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
     cap_min = bat.usable_kwh * bat.soc_min_pct / 100.0
     cap_max = bat.usable_kwh * bat.soc_max_pct / 100.0
     cap_res = bat.usable_kwh * bat.reserve_pct / 100.0
+    cap_floor = bat.usable_kwh * bat.auto_floor_pct / 100.0
 
     # --- SOC-target constraint (mode target_soc) -------------------------
     # The plan must end slot ``target_idx`` at >= ``soc_target_pct``.
-    # ``floor_traj[i]`` is the minimum stored kWh allowed at the end of
-    # hour i so the target stays reachable; ``tneed`` is the stored kWh
-    # still missing after expected PV coverage, i.e. what grid charging
-    # in cheap hours must still acquire.
+    # ``tneed`` is the stored kWh still missing after expected PV
+    # coverage, i.e. what grid charging in cheap hours must still acquire.
     target_stored: float | None = None
     tneed = 0.0
     pv_suf = [0.0] * (n + 1)
-    floor_traj: list[float] = [cap_res] * n
     target_idx = inp.target_idx if inp.soc_target_pct is not None else None
     if target_idx is not None and 0 <= target_idx < n:
         target_stored = (
@@ -138,27 +136,6 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
         pv_suf = [0.0] * (n + 1)
         for j in range(target_idx, -1, -1):
             pv_suf[j] = pv_suf[j + 1] + pv_st[j]
-        rate = max_chg_kw * bat.charge_efficiency  # stored kWh per hour
-        # Guaranteed stored kWh addable per hour: every deficit hour can
-        # grid-charge if needed (target mode buys at the cheapest
-        # available prices before the deadline, not only P25 hours);
-        # surplus hours contribute just their PV storage.
-        charge_cap = [0.0] * n
-        for j in range(target_idx + 1):
-            pv_j = inp.pv_kw[j] if j < len(inp.pv_kw) else 0.0
-            load_j = inp.load_kw[j] if j < len(inp.load_kw) else 0.0
-            if pv_j - load_j > 0.0:
-                charge_cap[j] = pv_st[j]
-            else:
-                charge_cap[j] = rate
-        cap_suf = [0.0] * (n + 1)
-        for j in range(target_idx, -1, -1):
-            cap_suf[j] = cap_suf[j + 1] + charge_cap[j]
-        for i in range(target_idx + 1):
-            floor_traj[i] = max(
-                cap_res,
-                min(cap_max, target_stored - cap_suf[i + 1]),
-            )
         tneed = max(0.0, target_stored - soc_kwh - pv_suf[0])
     soc_at_target: float | None = None
 
@@ -171,8 +148,64 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
         add = deficit if price >= exp_thr else 0.0
         fut_deficit[i] = fut_deficit[i + 1] + add
 
+    # --- Autonomous-discharge reserve floor ------------------------------
+    # The inverter drains the battery for EVERY deficit hour (load - PV)
+    # down to its physical cutoff — it does not consult prices and there
+    # is no discharge switch. ``req_end[i]`` is the minimum stored kWh
+    # required at the end of hour i so the trajectory never breaches the
+    # reserve floor under that physics. Backward pass over net stored
+    # drain, crediting each deficit hour's grid-charge capacity (the
+    # forward pass really does charge when the floor demands it).
+    max_dis_ac = bat.max_discharge_w / 1000.0
+    max_chg_ac = bat.max_charge_w / 1000.0
+    rate = max_chg_ac * bat.charge_efficiency  # stored kWh per hour
+    net_st = [0.0] * n
+    charge_cap_st = [0.0] * n
+    auto_st = [0.0] * n
+    for j in range(n):
+        pv_j = inp.pv_kw[j] if j < len(inp.pv_kw) else 0.0
+        load_j = inp.load_kw[j] if j < len(inp.load_kw) else 0.0
+        deficit_j = max(0.0, load_j - pv_j)
+        surplus_j = max(0.0, pv_j - load_j)
+        dis_st = min(deficit_j, max_dis_ac) / bat.discharge_efficiency
+        pv_st_j = min(surplus_j, max_chg_ac) * bat.charge_efficiency
+        net_st[j] = dis_st - pv_st_j
+        auto_st[j] = dis_st
+        if deficit_j > 0.0:
+            charge_cap_st[j] = rate
+    need_end = [cap_res] * n
+    run = cap_res
+    for i in range(n - 1, 0, -1):
+        run = max(cap_res, min(cap_max, run + net_st[i] - charge_cap_st[i]))
+        need_end[i - 1] = run
+
+    # SOC-target trajectory floor: same recurrence anchored at
+    # ``target_stored`` for the end of ``target_idx``. ``req_end`` is the
+    # element-wise maximum of both floors.
+    req_end = list(need_end)
+    if target_stored is not None and target_idx is not None \
+            and 0 <= target_idx < n:
+        t_run = max(cap_res, target_stored)
+        req_end[target_idx] = max(req_end[target_idx], t_run)
+        for i in range(target_idx, 0, -1):
+            t_run = max(
+                cap_res,
+                min(cap_max, t_run + net_st[i] - charge_cap_st[i]),
+            )
+            req_end[i - 1] = max(req_end[i - 1], t_run)
+
+    # Stored kWh the battery auto-discharges from hour i through the
+    # target hour — makes ``tneed`` drain-aware.
+    drain_suf = [0.0] * (n + 1)
+    for j in range(n - 1, -1, -1):
+        drain_suf[j] = drain_suf[j + 1] + auto_st[j]
+    target_drain = (
+        drain_suf[target_idx + 1] if target_idx is not None else 0.0
+    )
+
     slots: list[PlanSlot] = []
     cost = baseline = 0.0
+    reserve_breach = False
     for i in range(n):
         pv = inp.pv_kw[i] if i < len(inp.pv_kw) else 0.0
         load = inp.load_kw[i] if i < len(inp.load_kw) else 0.0
@@ -193,9 +226,16 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
 
         # Recompute the remaining SOC-target need every hour: a discharge
         # after an early fill re-opens the need, so it cannot be a
-        # one-shot decrement.
+        # one-shot decrement. ``drain_suf`` adds the autonomous discharge
+        # expected between now and the target hour.
         if target_stored is not None and i <= target_idx:
-            tneed = max(0.0, target_stored - soc_kwh - pv_suf[i])
+            tneed = max(
+                0.0,
+                target_stored
+                - soc_kwh
+                + (drain_suf[i] - target_drain)
+                - pv_suf[i],
+            )
 
         if surplus > 0.0:
             # Store PV surplus first, export the remainder.
@@ -235,61 +275,115 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
                         cheaper_cap += rate
                 if tneed > cheaper_cap:
                     forced_chg = (tneed - cheaper_cap) / bat.charge_efficiency
-            if cheap_ok or forced_chg > 0.0:
-                # Cheap hour with expensive deficits ahead or an unmet
-                # SOC target: cover the deficit from grid AND pre-charge.
-                want = cap_res + fut_deficit[i + 1] / bat.discharge_efficiency
+
+            # Physics: the inverter covers the deficit from the battery
+            # down to its physical cutoff — prices are irrelevant to it.
+            # Only a grid-charge slot lets the grid serve the deficit
+            # instead. ``dis_auto`` is what the battery WOULD discharge.
+            dis_auto = min(
+                deficit,
+                max_dis_ac,
+                max(0.0, soc_kwh - cap_floor) * bat.discharge_efficiency,
+            )
+            soc_after_auto = soc_kwh - dis_auto / bat.discharge_efficiency
+
+            econ_active = cheap_ok or forced_chg > 0.0
+            want_stored = cap_res
+            if cheap_ok:
+                want_stored = max(
+                    want_stored,
+                    cap_res
+                    + fut_deficit[i + 1] / bat.discharge_efficiency,
+                )
+                if want_target:
+                    want_stored = max(want_stored, soc_kwh + tneed)
+            elif forced_chg > 0.0:
+                want_stored = max(
+                    want_stored,
+                    soc_kwh + forced_chg * bat.charge_efficiency,
+                )
+            # Any charge also tops the trajectory up to the floor.
+            want_stored = max(want_stored, req_end[i])
+            headroom_ac = max(0.0, cap_max - soc_kwh) \
+                / bat.charge_efficiency
+            econ_chg = 0.0
+            if econ_active:
+                econ_chg = min(
+                    max_chg_ac,
+                    max(
+                        0.0,
+                        (min(cap_max, want_stored) - soc_kwh)
+                        / bat.charge_efficiency,
+                    ),
+                    headroom_ac,
+                )
                 if want_target and cheap_ok:
-                    want = max(want, soc_kwh + tneed)
+                    econ_chg = min(econ_chg, tneed / bat.charge_efficiency)
                 elif forced_chg > 0.0:
-                    want = max(want, soc_kwh + forced_chg
-                               * bat.charge_efficiency)
-                headroom = max(0.0, min(cap_max, want) - soc_kwh) \
-                    / bat.charge_efficiency
-                chg = min(bat.max_charge_w / 1000.0, headroom)
-                if want_target and cheap_ok:
-                    chg = min(chg, tneed / bat.charge_efficiency)
-                elif forced_chg > 0.0:
-                    chg = min(chg, forced_chg)
-                if chg > 0.01:
-                    soc_kwh += chg * bat.charge_efficiency
-                    batt_w = -chg * 1000.0
-                    action = ACTION_CHARGE_GRID
-                    reason = (
-                        "soc_target_precharge"
-                        if want_target and fut_deficit[i + 1] <= 0
-                        else "soc_target_forced_charge"
-                        if forced_chg > 0.0 and not cheap_ok
-                        else "cheap_hour_precharge"
-                    )
+                    econ_chg = min(econ_chg, forced_chg)
+            # Reserve/target guard: if autonomous discharge would breach
+            # the required floor, charge now — any amount flips the
+            # deficit coverage to the grid. When the floor is pinned at
+            # ``cap_max`` by an infeasible reserve trajectory (and no
+            # SOC target justifies it), charging cannot help: let the
+            # battery discharge to its physical floor and warn instead.
+            target_binds = (
+                target_stored is not None
+                and i <= target_idx
+                and req_end[i] > need_end[i] + 1e-6
+            )
+            floor_infeasible = (
+                req_end[i] >= cap_max - 1e-6 and not target_binds
+            )
+            guard_breach = (
+                not floor_infeasible
+                and soc_after_auto < req_end[i] - 1e-6
+            )
+            guard_chg = 0.0
+            if guard_breach:
+                guard_chg = max(
+                    0.05,
+                    (req_end[i] - soc_kwh) / bat.charge_efficiency,
+                )
+            chg = min(max_chg_ac, headroom_ac, max(econ_chg, guard_chg))
+            if chg <= 0.01 and guard_chg > 0.0:
+                # No headroom but coverage must flip to the grid anyway
+                # (e.g. full battery on the target hour).
+                chg = 0.05
+            if chg > 0.01 and (econ_active or guard_chg > 0.0):
+                soc_kwh = min(
+                    cap_max, soc_kwh + chg * bat.charge_efficiency
+                )
+                batt_w = -chg * 1000.0
+                action = ACTION_CHARGE_GRID
+                if want_target and cheap_ok \
+                        and fut_deficit[i + 1] <= 0.0:
+                    reason = "soc_target_precharge"
+                elif (forced_chg > 0.0 and not cheap_ok) \
+                        or (guard_breach and target_binds):
+                    reason = "soc_target_forced_charge"
+                elif guard_chg > econ_chg or not econ_active:
+                    reason = "soc_reserve_charge"
                 else:
-                    action = ACTION_IMPORT
-                    reason = "cheap_hour_no_headroom"
+                    reason = "cheap_hour_precharge"
                 grid = deficit + chg
-            elif price is not None and price >= exp_thr and \
-                    soc_kwh > floor_traj[i]:
-                # Expensive deficit: discharge above the trajectory floor
-                # (reserve, or the level needed to still hit the SOC target).
-                avail = (soc_kwh - floor_traj[i]) * bat.discharge_efficiency
-                dis = min(deficit, bat.max_discharge_w / 1000.0, avail)
-                soc_kwh -= dis / bat.discharge_efficiency
-                batt_w = dis * 1000.0
-                grid = deficit - dis
-                action = ACTION_DISCHARGE
-                reason = "expensive_deficit"
             else:
-                grid = deficit
-                if deficit <= 0.0:
-                    reason = "balanced"
-                elif price is not None and price >= exp_thr:
-                    action = ACTION_HOLD
-                    reason = "reserve_hold"
+                # No charge slot: the battery discharges autonomously and
+                # the grid covers only what the battery cannot.
+                soc_kwh = soc_after_auto
+                grid = deficit - dis_auto
+                if dis_auto > 0.01:
+                    batt_w = dis_auto * 1000.0
+                    action = ACTION_DISCHARGE
+                    reason = "auto_discharge"
                 else:
                     action = ACTION_IMPORT
                     reason = "mid_price_import"
 
         if target_idx is not None and i == target_idx:
             soc_at_target = soc_kwh
+        if soc_kwh < req_end[i] - 0.05:
+            reserve_breach = True
         imp = max(0.0, grid)
         exp = max(0.0, -grid)
         cost += imp * (price or 0.0)
@@ -311,6 +405,8 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
     if target_stored is not None and soc_at_target is not None \
             and soc_at_target < target_stored - 1e-6:
         warnings.append("soc_target_not_reached")
+    if reserve_breach:
+        warnings.append("soc_reserve_risk")
 
     return EnergyPlan(
         generated_at=inp.first_hour,

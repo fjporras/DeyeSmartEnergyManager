@@ -45,16 +45,20 @@ def _arbitrage_prices(n=24):
 def test_arbitrage_charges_cheap_and_discharges_expensive():
     prices = _arbitrage_prices()
     plan = optimize(_inp(prices, [0.0] * 24, [2.0] * 24))
-    actions = {s.start.hour: s.action for s in plan.slots}
-    grid_charged = [h for h, a in actions.items()
-                    if a == model.ACTION_CHARGE_GRID]
-    discharged = [h for h, a in actions.items()
-                  if a == model.ACTION_DISCHARGE]
-    # Pre-charge happens in hours strictly cheaper than the discharge
-    # hours (mid-price hours before the peak are profitable too).
+    grid_charged = [
+        s.start.hour for s in plan.slots
+        if s.action == model.ACTION_CHARGE_GRID
+    ]
+    # Grid charging only happens while the price is below the expensive
+    # block (cheap precharge, mid-price top-ups and reserve guard).
     assert grid_charged and all(prices[h] < 0.30 for h in grid_charged)
-    assert all(h < min(discharged) for h in grid_charged)
-    assert discharged and all(19 <= h <= 22 for h in discharged)
+    # The battery autonomously serves every deficit hour; during the
+    # expensive block it covers the load entirely (no grid import).
+    expensive = [s for s in plan.slots if 19 <= s.start.hour <= 22]
+    assert expensive and all(
+        s.grid_power_w < 1.0 and s.battery_power_w > 0
+        for s in expensive
+    )
     assert plan.expected_cost_eur < plan.baseline_cost_eur
     assert plan.expected_savings_eur > 0
 
@@ -77,11 +81,19 @@ def test_pv_surplus_charges_battery_first():
 
 
 def test_flat_prices_no_arbitrage():
+    """Flat prices: no economic cycling — the battery only holds the
+    reserve floor via autonomous discharge + epsilon grid cover."""
     plan = optimize(_inp([0.15] * 24, [0.0] * 24, [2.0] * 24))
     assert not any(
-        s.action in (model.ACTION_CHARGE_GRID, model.ACTION_DISCHARGE)
+        s.reason in (
+            "cheap_hour_precharge",
+            "soc_target_precharge",
+            "soc_target_forced_charge",
+        )
         for s in plan.slots
     )
+    # Reserve floor is never breached.
+    assert all(s.soc_end_pct >= 35.0 - 0.2 for s in plan.slots)
 
 
 def test_missing_prices_disable_arbitrage():
@@ -89,9 +101,14 @@ def test_missing_prices_disable_arbitrage():
         _inp([None] * 24, [0.0] * 24, [2.0] * 24)
     )
     assert "no_price_data" in plan.warnings
-    assert not any(
-        s.action == model.ACTION_CHARGE_GRID for s in plan.slots
+    # Without prices there is no economic charging — only the reserve
+    # guard may flip deficit coverage to the grid.
+    assert all(
+        s.reason == "soc_reserve_charge"
+        for s in plan.slots
+        if s.action == model.ACTION_CHARGE_GRID
     )
+    assert all(s.soc_end_pct >= 35.0 - 0.2 for s in plan.slots)
 
 
 def test_reserve_blocks_discharge_when_soc_low():
@@ -108,9 +125,47 @@ def test_reserve_blocks_discharge_when_soc_low():
 def test_full_battery_exports_surplus():
     bat = BatteryParams(**{**BAT.__dict__, "soc_pct": 95.0})
     pv = [6.0 if 10 <= h <= 13 else 0.0 for h in range(24)]
-    plan = optimize(_inp([0.15] * 24, pv, [1.0] * 24, bat=bat))
+    # Zero load: no deficit hours, so the full battery is never drained
+    # and the midday surplus must be exported.
+    plan = optimize(_inp([0.15] * 24, pv, [0.0] * 24, bat=bat))
     midday = [s for s in plan.slots if 10 <= s.start.hour <= 13]
     assert all(s.grid_power_w < 0 for s in midday)
+
+
+def test_autonomous_discharge_down_to_physical_floor():
+    """With reserve below the physical cutoff, the battery drains to
+    ``auto_floor_pct`` and the grid covers the rest — prices ignored."""
+    bat = BatteryParams(
+        **{**BAT.__dict__, "soc_pct": 20.0, "reserve_pct": 10.0}
+    )
+    # 8 kW load exceeds max discharge (6.3 kW): battery drains to the
+    # 15% floor, then plain imports cover the remainder.
+    plan = optimize(_inp([0.15] * 24, [0.0] * 24, [8.0] * 24, bat=bat))
+    floor_pct = 100.0 * bat.usable_kwh * bat.auto_floor_pct / 100.0 \
+        / bat.usable_kwh
+    assert all(s.soc_end_pct >= floor_pct - 0.2 for s in plan.slots)
+    assert any(
+        s.action == model.ACTION_IMPORT and s.battery_power_w == 0
+        for s in plan.slots
+    )
+
+
+def test_reserve_guard_forces_charge_at_any_price():
+    """When autonomous discharge would breach the reserve, the plan
+    grid-charges even at mid prices (``soc_reserve_charge``)."""
+    plan = optimize(_inp([0.15] * 24, [0.0] * 24, [2.0] * 24))
+    guarded = [
+        s for s in plan.slots if s.reason == "soc_reserve_charge"
+    ]
+    assert guarded
+    assert all(s.action == model.ACTION_CHARGE_GRID for s in guarded)
+
+
+def test_soc_reserve_risk_warns_when_infeasible():
+    """Reserve above what charge capacity can sustain -> warning."""
+    bat = BatteryParams(**{**BAT.__dict__, "reserve_pct": 80.0})
+    plan = optimize(_inp([0.15] * 24, [0.0] * 24, [8.0] * 24, bat=bat))
+    assert "soc_reserve_risk" in plan.warnings
 
 
 def test_invalid_battery_params_warn():
@@ -134,14 +189,14 @@ def test_hourly_export_prices_applied():
             0.05 if h == 12 else 0.14 for h in range(24)
         ),
     )
-    plan = optimize(inp)
+    plan = optimize(PlannerInput(
+        **{**inp.__dict__, "load_kw": tuple([0.0] * 24)}
+    ))
     slot12 = plan.slots[12]
     assert slot12.grid_power_w < 0  # exporting
-    # 23 deficit hours imported at 0.15; 5 kW exported at the hourly
-    # vertido price 0.05 (not the flat 0.14 fallback).
-    assert abs(
-        plan.expected_cost_eur - (23 * 0.15 - 5.0 * 0.05)
-    ) < 0.01
+    # 6 kW exported at the hourly vertido price 0.05 — not the flat
+    # 0.14 fallback (which would give -0.84).
+    assert abs(plan.expected_cost_eur - (-6.0 * 0.05)) < 0.01
 
 
 def _target_input(target_idx, soc_target, prices=None, pv=None, load=None):

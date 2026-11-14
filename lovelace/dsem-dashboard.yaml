@@ -94,6 +94,7 @@ views:
             | replace('battery_capacity_unknown', 'capacidad batería desconocida')
             | replace('invalid_soc_range', 'rango SOC inválido')
             | replace('reserve_below_min', 'reserva bajo el mínimo')
+            | replace('soc_reserve_risk', 'reserva en riesgo')
           %}
           {% set ctxt =
             (a.control | default('—'))
@@ -139,6 +140,9 @@ views:
           | FV prevista | {{ ptxt }} |
           | Horas sin precio | {{ a.price_missing_hours }} |
           | Ventana TOU | {{ tou_txt }}{% if a.tou_now_soc is defined %} (SOC máx {{ a.tou_now_soc }}%){% endif %} |
+          {%- if a.auto_floor_pct is defined %}
+          | Suelo descarga autónoma | {{ a.auto_floor_pct }}% |
+          {%- endif %}
           {%- if a.soc_target_pct is defined and a.soc_target_pct != 'unset' %}
           | Objetivo SOC | {{ a.soc_target_pct }}% a las {{ a.soc_target_time }} (hora {{ a.soc_target_slot }}) |
           {%- endif %}
@@ -184,6 +188,8 @@ views:
             'cheap_hour_precharge': 'hora barata: precarga',
             'soc_target_precharge': 'objetivo SOC: precarga',
             'soc_target_forced_charge': 'objetivo SOC: carga forzada',
+            'soc_reserve_charge': 'reserva: carga forzada',
+            'auto_discharge': 'descarga autónoma',
             'expensive_deficit': 'déficit en hora cara',
             'mid_price_import': 'importación precio medio',
             'reserve_hold': 'retención por reserva',

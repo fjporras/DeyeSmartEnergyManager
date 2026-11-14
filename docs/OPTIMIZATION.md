@@ -59,13 +59,35 @@ así que el recambio será local a `optimizer.optimize()`.
 
 ## 6. Heurística v1 (qué hace hoy)
 
+Desde v0.4.0 el modelo refleja la física real del inversor: **la batería
+descarga autónomamente en TODA hora con déficit** (`carga − FV`) hasta su
+corte físico (`auto_floor_pct`, leído de
+`number.<inversor>_battery_shutdown_soc` ≈ 15 %). No existe switch de
+descarga ni decisión económica en ese flujo — el inversor no consulta
+precios. El plan solo controla el **permiso de carga desde red**.
+
 1. Umbrales por cuantiles sobre los precios del horizonte: barato ≤ Q25,
    caro ≥ max(Q75, suelo de arbitraje con eficiencias+degradación).
 2. Excedente FV → batería primero, exportación después.
-3. Déficit en hora cara → descarga hasta la reserva.
-4. Hora barata con déficit caro futuro → precarga desde red limitada al
-   déficit caro estimado restante.
-5. Coste esperado vs baseline (batería inerte) para estimar ahorro.
+3. Déficit → la batería cubre `min(déficit, P_dis_max, SOC − auto_floor)`;
+   la red solo importa el remanente (`auto_discharge`).
+4. **Suelo de trayectoria `req_end[i]`** (paso hacia atrás sobre el
+   drenaje neto almacenado, acreditando la capacidad de carga por hora):
+   - Reserva: `need_end` garantiza `soc ≥ soc_reserve` al final de cada
+     hora; si la descarga autónoma lo violaría → `soc_reserve_charge`
+     (carga forzada a cualquier precio; basta cualquier cantidad para
+     que la red sirva el déficit).
+   - Objetivo SOC: segunda trayectoria anclada a `soc_target` en
+     `target_idx`, combinada por máximo → `soc_target_forced_charge`.
+   - Si el suelo queda pineado en `soc_max` por una reserva inviable
+     (sin objetivo que lo justifique), no se fuerza carga: la batería
+     descarga hasta el piso físico y se emite `soc_reserve_risk`.
+5. Arbitraje: en horas baratas con déficit caro futuro (o necesidad de
+   objetivo) → `charge_grid` (`cheap_hour_precharge`,
+   `soc_target_precharge`, `soc_target_forced_charge`), limitado al
+   déficit caro/objetivo estimado restante. `tneed` es drain-aware
+   (incluye la descarga autónoma esperada hasta la hora objetivo).
+6. Coste esperado vs baseline (batería inerte) para estimar ahorro.
 
 Cada `PlanSlot` lleva `reason` — explicable por diseño.
 

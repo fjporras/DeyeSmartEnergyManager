@@ -330,6 +330,8 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
             reserve = float(
                 opts.get(CONF_RESERVE_SOC_PCT, DEFAULT_RESERVE_SOC_PCT)
             )
+            auto_floor = self._auto_floor_pct()
+            self.plan_meta["auto_floor_pct"] = f"{auto_floor:.0f}"
             battery = BatteryParams(
                 usable_kwh=float(
                     opts.get(
@@ -363,6 +365,7 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
                         CONF_DEGRADATION_EUR_KWH, DEFAULT_DEGRADATION_EUR_KWH
                     )
                 ),
+                auto_floor_pct=auto_floor,
             )
             self.plan_meta["price_missing_hours"] = str(
                 sum(1 for p in import_prices if p is None)
@@ -424,6 +427,41 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
             self.plan_meta = {}
             return None
 
+    def _entity_prefix(self) -> str | None:
+        """Derive the inverter entity prefix from the grid-charge switch."""
+        switch = self._entry.options.get(
+            CONF_GRID_CHARGE_SWITCH_ENTITY,
+            DEFAULT_GRID_CHARGE_SWITCH_ENTITY,
+        )
+        prefix = switch.split(".", 1)[-1]
+        suffix = "_battery_grid_charging"
+        if prefix.endswith(suffix):
+            prefix = prefix[: -len(suffix)]
+        return prefix or None
+
+    def _auto_floor_pct(self) -> float:
+        """Physical SOC floor for autonomous battery discharge.
+
+        Reads ``number.<prefix>_battery_shutdown_soc`` — the inverter's
+        own cutoff (~15%). Falls back to the dataclass default when the
+        entity is missing or unreadable.
+        """
+        prefix = self._entity_prefix()
+        if prefix:
+            state = self.hass.states.get(
+                f"number.{prefix}_battery_shutdown_soc"
+            )
+            if state is not None and state.state not in _UNAVAIL:
+                try:
+                    value = float(state.state)
+                except (TypeError, ValueError):
+                    value = -1.0
+                if 0.0 <= value <= 100.0:
+                    return value
+        return BatteryParams.__dataclass_fields__[
+            "auto_floor_pct"
+        ].default
+
     def _tou_diagnostics(
         self, first_hour: datetime, horizon: int
     ) -> dict[str, str]:
@@ -434,14 +472,9 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
         ``program_N_charging``/``program_N_time`` pairs. Never raises.
         """
         try:
-            switch = self._entry.options.get(
-                CONF_GRID_CHARGE_SWITCH_ENTITY,
-                DEFAULT_GRID_CHARGE_SWITCH_ENTITY,
-            )
-            prefix = switch.split(".", 1)[-1]
-            suffix = "_battery_grid_charging"
-            if prefix.endswith(suffix):
-                prefix = prefix[: -len(suffix)]
+            prefix = self._entity_prefix()
+            if prefix is None:
+                return {"tou_status": "unavailable"}
             states_sel = [
                 self.hass.states.get(
                     f"select.{prefix}_program_{i}_charging"
