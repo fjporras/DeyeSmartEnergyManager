@@ -149,6 +149,20 @@ Es solo diagnóstico: el plan **no** se restringe por el TOU. Si el TOU
 bloquea la ventana que el plan necesita, el síntoma es que el switch
 está ON pero `battery_power` no muestra carga.
 
+#### `switch.*_off_grid` — modo isla (verificado 2026-11-15)
+
+⚠️ **`off_grid` ON bloquea la carga de batería desde red**: con él
+activado el inversor prioriza batería→carga (grid exchange = 0) y
+`battery_grid_charging` ON no produce carga. Comprobado en vivo:
+al apagarlo, `battery_power` pasó de +2,2 kW a −5 kW y
+`external_power` a +7,1 kW en ~2 min.
+
+**Regla operativa**: `off_grid` debe estar **OFF** en operación
+normal para que el arbitrador pueda recargar. Para conservar backup
+en cortes reales, la opción es activarlo solo cuando la automatización
+de corte detecte tensión <100 V (en isla no hay red que cargar de
+todos modos).
+
 ### Modo `target_soc` — objetivo SOC programado
 
 Cuando el modo es `target_soc`, el plan debe terminar la hora que
