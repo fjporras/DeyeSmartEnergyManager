@@ -95,6 +95,7 @@ Las series usadas quedan visibles en los atributos de
 | `mode` | `shadow` | Modo inicial obligatorio |
 | `enable_control` | `false` | Habilita modos ejecutores; sin él, `select.dsem_mode` rechaza `auto`/`economic`/`solar_priority`/`backup`/`target_soc` |
 | `grid_charge_switch_entity` | `switch.deye_…_battery_grid_charging` | Interruptor que escribe el ejecutor (acción `charge_grid` → on; resto → off) |
+| `pvpc_automation_entity` | `automation.pvpc_carga_bateria_deye_en_horas_baratas` | Automatización legada que comparte el interruptor; DSEM la pausa/restaura automáticamente |
 
 #### Ejecutor v1 (`control.py`)
 
@@ -110,10 +111,15 @@ backoff 30 min + notificación persistente. El estado queda en
 `plan_meta.control` (`control_ok:on`, `control_written:off`,
 `control_backoff`, …) y se notifica una vez al activar.
 
-⚠️ **Conflicto conocido**: `automation.pvpc_carga_bateria_deye_en_horas_baratas`
-actúa sobre el mismo interruptor en las 4 h PVPC más baratas. Con el
-control de DSEM activo hay que desactivarla — si no, ambas pelean por
-el switch cada hora.
+**Conflicto gestionado automáticamente**: la opción
+`pvpc_automation_entity` apunta a la automatización legada que también
+escribe `battery_grid_charging`
+(`automation.pvpc_carga_bateria_deye_en_horas_baratas`). Mientras haya
+un modo ejecutor con `enable_control`, DSEM la desactiva sola y guarda
+su estado previo; al volver a `shadow`/`manual`/`safe` (o al apagar
+`enable_control`) la restaura. Si la entidad no existe, simplemente no
+hace nada. El estado del ciclo queda en `plan_meta.control`
+(`conflict_suspended` / `conflict_restored`).
 
 ### Programas TOU del inversor (time-of-use)
 

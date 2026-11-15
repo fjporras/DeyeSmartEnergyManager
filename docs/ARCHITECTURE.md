@@ -158,6 +158,8 @@ Detallado en `docs/DEPLOYMENT.md` (a redactar en fase 16).
 ## 12. Conflictos externos
 
 `automation.pvpc_carga_bateria_deye_en_horas_baratas` actúa sobre
-`switch.battery_grid_charging`. En SHADOW convive; antes de cualquier modo
-ejecutor debe desactivarse **con autorización del usuario** (documentado en
-ENTITY_AUDIT §5.8 y DEPLOYMENT).
+`switch.battery_grid_charging`. En SHADOW convive; con un modo
+ejecutor + `enable_control` DSEM la desactiva automáticamente
+(`pvpc_automation_entity`, opción configurable) y la restaura al
+salir del modo ejecutor (`control.py`, `conflict_suspended`/
+`conflict_restored` en `plan_meta.control`).

@@ -26,8 +26,10 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_ENABLE_CONTROL,
     CONF_GRID_CHARGE_SWITCH_ENTITY,
+    CONF_PVPC_AUTOMATION_ENTITY,
     CONTROL_MODES,
     DEFAULT_GRID_CHARGE_SWITCH_ENTITY,
+    DEFAULT_PVPC_AUTOMATION_ENTITY,
     DOMAIN,
 )
 from .model import ACTION_CHARGE_GRID, EnergySnapshot
@@ -130,6 +132,113 @@ async def _apply(hass, entry, coordinator, snapshot) -> str | None:
         )
         return "control_write_failed_backoff"
     return "control_write_failed"
+
+
+def _conflict_marker_key(entry_id: str) -> str:
+    return f"{DOMAIN}_conflict_prev_{entry_id}"
+
+
+async def async_manage_conflicting_automation(
+    hass: HomeAssistant, entry, coordinator
+) -> str | None:
+    """Suspend/restore the legacy PVPC automation that shares the switch.
+
+    While an executor mode with ``enable_control`` is active, the PVPC
+    automation (which also writes ``battery_grid_charging``) is turned
+    off so both controllers don't fight over the same resource. When
+    DSEM leaves executor modes, the automation is restored to the state
+    it had before DSEM suspended it. Never raises.
+    """
+    try:
+        return await _manage_conflict(hass, entry, coordinator)
+    except Exception as err:  # noqa: BLE001 - must never break updates
+        _LOGGER.warning("DSEM conflict-manager error: %s", err)
+        return None
+
+
+async def _manage_conflict(hass, entry, coordinator) -> str | None:
+    active = (
+        coordinator.mode in CONTROL_MODES
+        and entry.options.get(CONF_ENABLE_CONTROL, False)
+    )
+    entity_id = entry.options.get(
+        CONF_PVPC_AUTOMATION_ENTITY, DEFAULT_PVPC_AUTOMATION_ENTITY
+    )
+    state = hass.states.get(entity_id)
+    if state is None:
+        return None
+    marker = _conflict_marker_key(entry.entry_id)
+    store = hass.data.setdefault(DOMAIN, {})
+    prev = store.get(marker)
+
+    if active:
+        if state.state != "on":
+            # Already off (manually or by us); keep any stored prev state.
+            return None
+        if prev is None:
+            store[marker] = "on"
+            _LOGGER.info(
+                "DSEM: suspending conflicting automation %s "
+                "(executor mode %s)", entity_id, coordinator.mode,
+            )
+        else:
+            _LOGGER.debug(
+                "DSEM: re-suspending %s (still in executor mode)", entity_id
+            )
+        await hass.services.async_call(
+            "automation", "turn_off", {"entity_id": entity_id}
+        )
+        _notify_conflict(hass, entry, entity_id, suspended=True)
+        return "conflict_suspended"
+
+    if prev is not None:
+        del store[marker]
+        service = "turn_on" if prev == "on" else "turn_off"
+        await hass.services.async_call(
+            "automation", service, {"entity_id": entity_id}
+        )
+        _LOGGER.info(
+            "DSEM: restored conflicting automation %s to '%s'",
+            entity_id, prev,
+        )
+        _notify_conflict(hass, entry, entity_id, suspended=False)
+        return "conflict_restored"
+    return None
+
+
+def _notify_conflict(
+    hass: HomeAssistant, entry, entity_id: str, *, suspended: bool
+) -> None:
+    """One-shot persistent notification about the automation handover."""
+    key = f"{DOMAIN}_conflict_notified_{'suspend' if suspended else 'restore'}_{entry.entry_id}_{entity_id}"
+    store = hass.data.setdefault(DOMAIN, {})
+    if store.get(key):
+        return
+    store[key] = True
+    title = (
+        "DSEM — automatización PVPC en pausa"
+        if suspended
+        else "DSEM — automatización PVPC restaurada"
+    )
+    message = (
+        f"{entity_id} se ha desactivado porque DSEM controla "
+        "battery_grid_charging en modo ejecutor. Se restaurará al "
+        "volver a shadow/manual/safe."
+        if suspended
+        else f"{entity_id} vuelve a su estado anterior tras salir "
+        "del modo ejecutor de DSEM."
+    )
+    hass.async_create_task(
+        hass.services.async_call(
+            "persistent_notification",
+            "create",
+            {
+                "title": title,
+                "message": message,
+                "notification_id": f"dsem_conflict_{entry.entry_id}",
+            },
+        )
+    )
 
 
 async def _write_and_verify(hass: HomeAssistant, entity_id: str, want: str) -> bool:

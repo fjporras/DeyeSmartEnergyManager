@@ -596,8 +596,12 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
         self.plan = await self._async_build_plan(snapshot)
         if self.plan is not None:
             await self._async_log_plan(self.plan)
-        from .control import async_apply_control
+        from .control import (
+            async_apply_control,
+            async_manage_conflicting_automation,
+        )
 
+        await async_manage_conflicting_automation(self.hass, self._entry, self)
         control_state = await async_apply_control(
             self.hass, self._entry, self, snapshot
         )

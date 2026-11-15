@@ -77,7 +77,8 @@
           "influx_export_field": "Field de precio de vertido",
           "influx_export_tag": "Valor del tag de vertido",
           "load_profile_quantile": "Cuantil del perfil de carga (0,5-0,95)",
-          "grid_charge_switch_entity": "Interruptor de carga de red que escribe el ejecutor (solo acción charge_grid)"
+          "grid_charge_switch_entity": "Interruptor de carga de red que escribe el ejecutor (solo acción charge_grid)",
+          "pvpc_automation_entity": "Automatización legada que comparte el interruptor de carga — se pausa automáticamente en modos ejecutores"
         }
       }
     },

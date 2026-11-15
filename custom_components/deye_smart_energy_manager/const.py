@@ -43,6 +43,7 @@ CONF_EXPORT_PRICE_EUR_KWH = "export_price_eur_kwh"
 CONF_MODE = "mode"
 CONF_ENABLE_CONTROL = "enable_control"
 CONF_GRID_CHARGE_SWITCH_ENTITY = "grid_charge_switch_entity"
+CONF_PVPC_AUTOMATION_ENTITY = "pvpc_automation_entity"
 CONF_LOAD_PROFILE_QUANTILE = "load_profile_quantile"
 
 # InfluxDB hourly price source (optional; uses the influxdb config entry)
@@ -126,6 +127,11 @@ DEFAULT_ENERGY_EXPORT_ENTITY = (
 )
 DEFAULT_GRID_CHARGE_SWITCH_ENTITY = (
     "switch.deye_sun_15k_sg05lp3_eu_sm2_battery_grid_charging"
+)
+# Legacy PVPC automation that also writes the grid-charging switch;
+# DSEM suspends it automatically while an executor mode is active.
+DEFAULT_PVPC_AUTOMATION_ENTITY = (
+    "automation.pvpc_carga_bateria_deye_en_horas_baratas"
 )
 # EV charger (dé EV Charger via tuya_local — no power sensor; power is
 # estimated as charge_current_A x EV_VOLTAGE when state == charging)

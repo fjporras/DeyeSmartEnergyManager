@@ -46,6 +46,7 @@ from .const import (
     CONF_MODE,
     CONF_OPTIMIZE_INTERVAL_MIN,
     CONF_PRICE_IMPORT_ENTITY,
+    CONF_PVPC_AUTOMATION_ENTITY,
     CONF_PV_FORECAST_ENTITY,
     CONF_PV_FORECAST_TOMORROW_ENTITY,
     CONF_PV_PEAK_TODAY_ENTITY,
@@ -84,6 +85,7 @@ from .const import (
     DEFAULT_MODE,
     DEFAULT_OPTIMIZE_INTERVAL_MIN,
     DEFAULT_PRICE_IMPORT_ENTITY,
+    DEFAULT_PVPC_AUTOMATION_ENTITY,
     DEFAULT_PV_FORECAST_ENTITY,
     DEFAULT_PV_FORECAST_TOMORROW_ENTITY,
     DEFAULT_PV_PEAK_TODAY_ENTITY,
@@ -298,6 +300,7 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
         options = {
             CONF_LOAD_PROFILE_QUANTILE: DEFAULT_LOAD_PROFILE_QUANTILE,
             CONF_GRID_CHARGE_SWITCH_ENTITY: DEFAULT_GRID_CHARGE_SWITCH_ENTITY,
+            CONF_PVPC_AUTOMATION_ENTITY: DEFAULT_PVPC_AUTOMATION_ENTITY,
             **self.config_entry.options,
         }
         return self.async_show_form(
@@ -317,6 +320,11 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                             CONF_GRID_CHARGE_SWITCH_ENTITY
                         ): selector.EntitySelector(
                             selector.EntitySelectorConfig(domain="switch")
+                        ),
+                        vol.Optional(
+                            CONF_PVPC_AUTOMATION_ENTITY
+                        ): selector.EntitySelector(
+                            selector.EntitySelectorConfig(domain="automation")
                         ),
                         vol.Required(CONF_BATTERY_USABLE_KWH): selector.NumberSelector(
                             selector.NumberSelectorConfig(
@@ -491,6 +499,14 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                 {
                     CONF_MODE: options.get(CONF_MODE, DEFAULT_MODE),
                     CONF_ENABLE_CONTROL: options.get(CONF_ENABLE_CONTROL, False),
+                    CONF_GRID_CHARGE_SWITCH_ENTITY: options.get(
+                        CONF_GRID_CHARGE_SWITCH_ENTITY,
+                        DEFAULT_GRID_CHARGE_SWITCH_ENTITY,
+                    ),
+                    CONF_PVPC_AUTOMATION_ENTITY: options.get(
+                        CONF_PVPC_AUTOMATION_ENTITY,
+                        DEFAULT_PVPC_AUTOMATION_ENTITY,
+                    ),
                     CONF_BATTERY_USABLE_KWH: options.get(
                         CONF_BATTERY_USABLE_KWH, DEFAULT_BATTERY_USABLE_KWH
                     ),

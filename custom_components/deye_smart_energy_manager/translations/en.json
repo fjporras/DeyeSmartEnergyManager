@@ -77,7 +77,8 @@
           "influx_export_field": "InfluxDB export-price field",
           "influx_export_tag": "InfluxDB export-price tag value",
           "load_profile_quantile": "Load profile quantile (0.5-0.95)",
-          "grid_charge_switch_entity": "Grid-charging switch written by the executor (charge_grid action only)"
+          "grid_charge_switch_entity": "Grid-charging switch written by the executor (charge_grid action only)",
+          "pvpc_automation_entity": "Legacy automation sharing the grid-charging switch — suspended automatically while an executor mode is active"
         }
       }
     },
