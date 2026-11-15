@@ -173,14 +173,20 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
             return None
 
     def _stale(self, entity_id: str | None, stale: list[str]) -> None:
-        """Flag entities whose data is too old (zero vs unavailable)."""
+        """Flag entities whose data is too old (zero vs unavailable).
+
+        Uses ``last_reported`` (integration liveness) rather than
+        ``last_updated`` (value changes): sensors legitimately pinned
+        at 0 W — e.g. grid power under zero-export, PV at night —
+        would otherwise look stale forever and block control writes.
+        """
         if not entity_id:
             return
         state = self.hass.states.get(entity_id)
-        if state is not None and (
-            dt_util.utcnow() - state.last_updated
-        ).total_seconds() > MAX_SNAPSHOT_AGE_S:
-            stale.append(entity_id)
+        if state is not None:
+            reported = getattr(state, "last_reported", None) or state.last_updated
+            if (dt_util.utcnow() - reported).total_seconds() > MAX_SNAPSHOT_AGE_S:
+                stale.append(entity_id)
 
     def _datetime(self, entity_id: str | None) -> datetime | None:
         """Read a timestamp/datetime-valued sensor."""
