@@ -104,6 +104,21 @@ la acción del slot actual a **una única escritura**: el interruptor
 `battery_grid_charging` del Deye (permiso de carga desde red — el
 inversor sigue decidiendo potencia y tiempos). No escribe nada más.
 
+**Guardia zero-export** (`plan_meta.zero_export`): en el mismo ciclo
+verifica que el inversor no pueda verter a la red — la vivienda no
+tiene camino físico de exportación, así que el excedente FV debe ir a
+la batería o curtarse. Si alguna entidad difiere, la corrige (una por
+ciclo, mismo min-dwell):
+
+| Entidad (prefijo del switch) | Objetivo |
+|---|---|
+| `select.<prefix>_work_mode` | `Zero Export To CT` |
+| `switch.<prefix>_export_surplus` | `off` |
+| `number.<prefix>_zero_export_power` | `20` (W de margen) |
+
+Estados: `ze_ok`, `ze_written:<entity>`, `ze_unavailable`,
+`ze_rate_limited`, `ze_backoff`, `ze_write_failed`.
+
 Interlocks: plan disponible + snapshot completo sin entidades
 missing/stale + gracia de 5 min tras arranque + mínimo 10 min entre
 escrituras + verificación leyendo el estado + 3 fallos seguidos →

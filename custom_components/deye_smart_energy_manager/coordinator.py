@@ -604,10 +604,16 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
             await self._async_log_plan(self.plan)
         from .control import (
             async_apply_control,
+            async_apply_zero_export_guard,
             async_manage_conflicting_automation,
         )
 
         await async_manage_conflicting_automation(self.hass, self._entry, self)
+        ze_state = await async_apply_zero_export_guard(
+            self.hass, self._entry, self
+        )
+        if ze_state:
+            self.plan_meta["zero_export"] = ze_state
         control_state = await async_apply_control(
             self.hass, self._entry, self, snapshot
         )

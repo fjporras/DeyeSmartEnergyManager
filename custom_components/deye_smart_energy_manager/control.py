@@ -1,18 +1,23 @@
-"""Bounded executor: plan action -> inverter switch (control modes only).
+"""Bounded executor: plan action -> inverter entities (control modes).
 
-Scope of v1 control is deliberately narrow: the ONLY writable surface is
-the Deye ``battery_grid_charging`` switch — it grants/denies permission
-to charge the battery from the grid; the inverter's own logic still
-decides power and timing. Nothing else is ever written.
+Writable surface (all gated by mode + ``enable_control``):
+  * ``battery_grid_charging`` switch — grants/denies grid-charge
+    permission; the inverter's own logic decides power and timing.
+  * Zero-export guard — keeps ``work_mode`` at ``Zero Export To CT``,
+    ``export_surplus`` off and ``zero_export_power`` at 20 W, so the
+    inverter never exports to the grid (the household has no physical
+    export path; surplus PV must go to the battery or be curtailed).
 
 Safety gates (all must pass before any service call):
   * mode in CONTROL_MODES and ``enable_control`` option on
-  * plan available with a current slot
-  * snapshot complete (no missing/stale required entities)
+  * plan available with a current slot (switch writes only)
+  * snapshot complete (no missing/stale required entities, switch only)
   * 5-minute grace period after integration start
   * >= CONTROL_MIN_INTERVAL_S between writes (anti-flapping)
   * write is verified by reading the state back; 3 consecutive failures
     open a 30-minute backoff and raise a persistent notification
+  * inverter protections (``*_protection_*``, SOC shutdown/low,
+    voltages, TOU programs) are NEVER written
 """
 from __future__ import annotations
 
@@ -41,6 +46,12 @@ CONTROL_VERIFY_TIMEOUT_S = 8.0     # read-back verification window
 CONTROL_BACKOFF_S = 1800           # pause control after repeated failures
 CONTROL_STARTUP_GRACE_S = 300      # no writes right after boot
 _UNAVAIL = ("unavailable", "unknown", "none", "")
+
+# Zero-export guard targets (verified live 2026-11-15): the inverter
+# must not export — there is no physical export path, so surplus PV
+# beyond battery capacity is curtailed by the inverter itself.
+ZERO_EXPORT_WORK_MODE = "Zero Export To CT"
+ZERO_EXPORT_MARGIN_W = 20.0
 
 
 async def async_apply_control(
@@ -239,6 +250,125 @@ def _notify_conflict(
             },
         )
     )
+
+
+async def async_apply_zero_export_guard(
+    hass: HomeAssistant, entry, coordinator
+) -> str | None:
+    """Keep the inverter's zero-export configuration enforced.
+
+    Checks ``work_mode`` (``Zero Export To CT``), ``export_surplus``
+    (off) and ``zero_export_power`` (20 W margin); writes whichever
+    deviates, one entity per call, under the same safety gates as the
+    grid-charge switch. Returns a short status for
+    ``plan_meta['zero_export']``; ``None`` when inactive. Never raises.
+    """
+    try:
+        return await _zero_export_guard(hass, entry, coordinator)
+    except Exception as err:  # noqa: BLE001 - control must never break updates
+        _LOGGER.warning("DSEM zero-export guard error: %s", err)
+        return "ze_error"
+
+
+async def _zero_export_guard(hass, entry, coordinator) -> str | None:
+    if coordinator.mode not in CONTROL_MODES:
+        return None
+    if not entry.options.get(CONF_ENABLE_CONTROL, False):
+        return None
+    now = dt_util.now()
+    ready_at = getattr(coordinator, "_control_ready_at", None)
+    if ready_at and now < ready_at:
+        return "ze_startup_grace"
+    backoff = getattr(coordinator, "_control_backoff_until", None)
+    if backoff and now < backoff:
+        return "ze_backoff"
+    prefix = coordinator._entity_prefix()
+    if not prefix:
+        return "ze_no_prefix"
+
+    targets = (
+        (
+            f"select.{prefix}_work_mode",
+            ZERO_EXPORT_WORK_MODE,
+            "select", "select_option",
+            {"option": ZERO_EXPORT_WORK_MODE},
+        ),
+        (
+            f"switch.{prefix}_export_surplus",
+            "off",
+            "switch", "turn_off",
+            {},
+        ),
+        (
+            f"number.{prefix}_zero_export_power",
+            ZERO_EXPORT_MARGIN_W,
+            "number", "set_value",
+            {"value": ZERO_EXPORT_MARGIN_W},
+        ),
+    )
+    saw_unavailable = False
+    for entity_id, want, domain, service, extra in targets:
+        state = hass.states.get(entity_id)
+        if state is None or state.state.lower() in _UNAVAIL:
+            saw_unavailable = True
+            continue
+        if _state_matches(state.state, want):
+            continue
+        # First mismatch wins; one write per cycle (min-dwell shared
+        # with the grid-charge switch via _control_last_write).
+        last_write = getattr(coordinator, "_control_last_write", None)
+        if last_write and (now - last_write).total_seconds() \
+                < CONTROL_MIN_INTERVAL_S:
+            return "ze_rate_limited"
+        ok = await _write_entity_and_verify(
+            hass, entity_id, domain, service,
+            {"entity_id": entity_id, **extra}, want,
+        )
+        coordinator._control_last_write = now
+        if ok:
+            _LOGGER.info(
+                "DSEM zero-export: %s -> %s", entity_id, want
+            )
+            return f"ze_written:{entity_id}"
+        return "ze_write_failed"
+    if saw_unavailable:
+        return "ze_unavailable"
+    return "ze_ok"
+
+
+def _state_matches(actual: str, want) -> bool:
+    """Compare a state string to a string or numeric target."""
+    if isinstance(want, str):
+        return actual.strip().lower() == want.strip().lower()
+    try:
+        return abs(float(actual) - float(want)) < 0.51
+    except (TypeError, ValueError):
+        return False
+
+
+async def _write_entity_and_verify(
+    hass: HomeAssistant,
+    entity_id: str,
+    domain: str,
+    service: str,
+    params: dict,
+    want,
+) -> bool:
+    """Generic guarded write + read-back verification."""
+    deadline = asyncio.get_running_loop().time() + CONTROL_VERIFY_TIMEOUT_S
+    try:
+        await hass.services.async_call(
+            domain, service, params, blocking=True
+        )
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning("DSEM %s call failed (%s): %s", domain, service, err)
+        return False
+    while asyncio.get_running_loop().time() < deadline:
+        await asyncio.sleep(1.0)
+        state = hass.states.get(entity_id)
+        if state is not None and _state_matches(state.state, want):
+            return True
+    return False
 
 
 async def _write_and_verify(hass: HomeAssistant, entity_id: str, want: str) -> bool:

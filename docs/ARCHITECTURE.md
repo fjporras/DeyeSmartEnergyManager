@@ -83,10 +83,11 @@ Escritura exclusivamente sobre entidades solarman (NO servicios `solarman.write_
 
 | Mecanismo | Entidades | Uso DSEM |
 |---|---|---|
-| TOU programas | `time.program_N_time`, `number.program_N_power/soc`, `select.program_N_charging` | Traducir plan SOC/potencia a franjas del inversor |
+| TOU programas | `time.program_N_time`, `number.program_N_power/soc`, `select.program_N_charging` | Solo lectura/diagnóstico (`tou_*` en plan_meta) |
 | Carga de red | `switch.battery_grid_charging`, `number.battery_grid_charging_current` | Activar/limitar carga desde red |
+| Zero-export | `select.work_mode`, `switch.export_surplus`, `number.zero_export_power` | Guardia: mantiene `Zero Export To CT` / off / 20 W |
 | Límites | `number.battery_max_charging/discharging_current`, `number.grid_max_import/export_power` | Acotar potencia |
-| Modo trabajo | `select.work_mode`, `select.energy_pattern`, `select.time_of_use` | Solo con validación previa |
+| Modo trabajo | `select.work_mode`, `select.energy_pattern`, `select.time_of_use` | `work_mode` solo vía guardia zero-export |
 
 Reglas de seguridad (control.py): validación de dominio + límites, min-dwell
 entre escrituras, histéresis, máx. reintentos, modo `safe` ante error persistente,
