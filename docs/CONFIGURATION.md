@@ -119,6 +119,19 @@ ciclo, mismo min-dwell):
 Estados: `ze_ok`, `ze_written:<entity>`, `ze_unavailable`,
 `ze_rate_limited`, `ze_backoff`, `ze_write_failed`.
 
+**Guardia `off_grid`** (`plan_meta.offgrid`): verificado en vivo
+(2026-11-16) que en este inversor `off_grid` es el **único** interruptor
+que permite a la batería descargar para servir la carga — con él OFF la
+batería queda idle y la red paga todo. Pero ON **bloquea la carga desde
+red**, así que el ejecutor lo gestiona según el slot: **ON solo cuando
+la acción es `discharge`**, OFF en cualquier otro caso. No escribe si
+`binary_sensor.<prefix>_grid` indica red ausente (la automatización de
+cortes es dueña del switch en isla), ni fuerza ON por debajo de
+`OFFGRID_MIN_SOC_PCT` (12 %). Al salir de los modos ejecutores, un ON
+puesto por DSEM se restaura a OFF. Estados: `og_ok:on|off`,
+`og_written:on|off`, `og_rate_limited`, `og_unavailable`,
+`og_grid_down`, `og_low_soc`, `og_backoff`, `og_unsafe_data`, …
+
 Interlocks: plan disponible + snapshot completo sin entidades
 missing/stale + gracia de 5 min tras arranque + mínimo 10 min entre
 escrituras + verificación leyendo el estado + 3 fallos seguidos →
@@ -172,11 +185,13 @@ activado el inversor prioriza batería→carga (grid exchange = 0) y
 al apagarlo, `battery_power` pasó de +2,2 kW a −5 kW y
 `external_power` a +7,1 kW en ~2 min.
 
-**Regla operativa**: `off_grid` debe estar **OFF** en operación
-normal para que el arbitrador pueda recargar. Para conservar backup
-en cortes reales, la opción es activarlo solo cuando la automatización
-de corte detecte tensión <100 V (en isla no hay red que cargar de
-todos modos).
+**Regla operativa**: `off_grid` debe estar **OFF** para cargar desde
+red y **ON** para que la batería descargue a la carga (verificado:
+`energy_pattern` y `work_mode` no gobiernan la descarga). En modos
+ejecutores DSEM lo gestiona automáticamente según el plan (ver
+guardia `off_grid` arriba); en `shadow`/`manual`/`safe` queda bajo
+control manual. Para conservar backup en cortes reales, la automatización
+de corte lo activa al detectar tensión <100 V.
 
 ### Modo `target_soc` — objetivo SOC programado
 

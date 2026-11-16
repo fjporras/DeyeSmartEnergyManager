@@ -7,6 +7,10 @@ Writable surface (all gated by mode + ``enable_control``):
     ``export_surplus`` off and ``zero_export_power`` at 20 W, so the
     inverter never exports to the grid (the household has no physical
     export path; surplus PV must go to the battery or be curtailed).
+  * ``off_grid`` guard — ON only while the plan expects the battery to
+    serve the load (``discharge`` slots), OFF otherwise because it
+    blocks grid charging. Verified live: this inverter only discharges
+    to the house load when ``off_grid`` is ON.
 
 Safety gates (all must pass before any service call):
   * mode in CONTROL_MODES and ``enable_control`` option on
@@ -37,7 +41,11 @@ from .const import (
     DEFAULT_PVPC_AUTOMATION_ENTITY,
     DOMAIN,
 )
-from .model import ACTION_CHARGE_GRID, EnergySnapshot
+from .model import (
+    ACTION_CHARGE_GRID,
+    ACTION_DISCHARGE,
+    EnergySnapshot,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,6 +60,14 @@ _UNAVAIL = ("unavailable", "unknown", "none", "")
 # beyond battery capacity is curtailed by the inverter itself.
 ZERO_EXPORT_WORK_MODE = "Zero Export To CT"
 ZERO_EXPORT_MARGIN_W = 20.0
+
+# Off-grid guard (verified live 2026-11-16): on this inverter ``off_grid``
+# is the ONLY switch that lets the battery discharge to serve the house
+# load — with it OFF the battery stays idle and the grid pays everything.
+# The same switch also BLOCKS grid charging, so it must be OFF whenever
+# the plan calls for ``charge_grid``. Mapping: ON only for discharge
+# slots, OFF for everything else.
+OFFGRID_MIN_SOC_PCT = 12.0  # never force discharge below physical floor
 
 
 async def async_apply_control(
@@ -334,6 +350,126 @@ async def _zero_export_guard(hass, entry, coordinator) -> str | None:
     if saw_unavailable:
         return "ze_unavailable"
     return "ze_ok"
+
+
+async def async_apply_offgrid_guard(
+    hass: HomeAssistant,
+    entry,
+    coordinator,
+    snapshot: EnergySnapshot,
+) -> str | None:
+    """Keep ``off_grid`` aligned with the plan's discharge needs.
+
+    ON only while the current slot expects the battery to serve the
+    load (``discharge`` action); OFF otherwise because it blocks grid
+    charging. Same safety gates as the other writers, plus: never
+    writes while the grid-presence sensor reports the grid absent
+    (the outage automation owns ``off_grid`` then), and never forces
+    ON below ``OFFGRID_MIN_SOC_PCT``. On leaving executor modes a
+    DSEM-owned ON state is restored to OFF. Never raises.
+    """
+    try:
+        return await _offgrid_guard(hass, entry, coordinator, snapshot)
+    except Exception as err:  # noqa: BLE001 - control must never break updates
+        _LOGGER.warning("DSEM off-grid guard error: %s", err)
+        return "og_error"
+
+
+async def _offgrid_guard(hass, entry, coordinator, snapshot) -> str | None:
+    active = (
+        coordinator.mode in CONTROL_MODES
+        and entry.options.get(CONF_ENABLE_CONTROL, False)
+    )
+    prefix = coordinator._entity_prefix()
+    entity_id = f"switch.{prefix}_off_grid" if prefix else None
+    marker = f"{DOMAIN}_offgrid_owned_{entry.entry_id}"
+    store = hass.data.setdefault(DOMAIN, {})
+
+    if not active:
+        # Restore a DSEM-owned ON state when control is no longer active.
+        if entity_id and store.pop(marker, False):
+            state = hass.states.get(entity_id)
+            if state is not None and state.state == "on":
+                try:
+                    await hass.services.async_call(
+                        "switch", "turn_off", {"entity_id": entity_id}
+                    )
+                    _LOGGER.info(
+                        "DSEM off-grid: restored %s to off", entity_id
+                    )
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.warning("DSEM off-grid restore failed: %s", err)
+        return None
+
+    now = dt_util.now()
+    backoff = getattr(coordinator, "_offgrid_backoff_until", None)
+    if backoff and now < backoff:
+        return "og_backoff"
+    ready_at = getattr(coordinator, "_control_ready_at", None)
+    if ready_at and now < ready_at:
+        return "og_startup_grace"
+    plan = coordinator.plan
+    if plan is None or plan.current_slot is None:
+        return "og_no_plan"
+    if snapshot.missing_entities or snapshot.stale_entities:
+        return "og_unsafe_data"
+    if not entity_id:
+        return "og_no_entity"
+
+    want_on = plan.current_slot.action == ACTION_DISCHARGE
+    state = hass.states.get(entity_id)
+    if state is None or state.state.lower() in _UNAVAIL:
+        return "og_unavailable"
+
+    if want_on:
+        # Do not fight the outage automation: if the grid is absent the
+        # island logic owns this switch.
+        grid = hass.states.get(f"binary_sensor.{prefix}_grid")
+        if grid is not None and grid.state == "off":
+            return "og_grid_down"
+        soc = snapshot.battery_soc_pct
+        if soc is not None and soc <= OFFGRID_MIN_SOC_PCT:
+            return "og_low_soc"
+
+    want = "on" if want_on else "off"
+    if state.state == want:
+        if want_on:
+            store[marker] = True
+        else:
+            store.pop(marker, None)
+        coordinator._offgrid_failures = 0
+        return f"og_ok:{want}"
+
+    last_write = getattr(coordinator, "_offgrid_last_write", None)
+    if last_write and (now - last_write).total_seconds() \
+            < CONTROL_MIN_INTERVAL_S:
+        return "og_rate_limited"
+
+    ok = await _write_and_verify(hass, entity_id, want)
+    coordinator._offgrid_last_write = now
+    if ok:
+        coordinator._offgrid_failures = 0
+        if want_on:
+            store[marker] = True
+        else:
+            store.pop(marker, None)
+        _LOGGER.info(
+            "DSEM off-grid: %s -> %s (plan action %s)",
+            entity_id, want, plan.current_slot.action,
+        )
+        return f"og_written:{want}"
+    failures = getattr(coordinator, "_offgrid_failures", 0) + 1
+    coordinator._offgrid_failures = failures
+    if failures >= 3:
+        coordinator._offgrid_backoff_until = now + timedelta(
+            seconds=CONTROL_BACKOFF_S
+        )
+        _LOGGER.error(
+            "DSEM off-grid: %d consecutive write failures on %s",
+            failures, entity_id,
+        )
+        return "og_write_failed_backoff"
+    return "og_write_failed"
 
 
 def _state_matches(actual: str, want) -> bool:

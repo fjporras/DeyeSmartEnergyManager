@@ -604,6 +604,7 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
             await self._async_log_plan(self.plan)
         from .control import (
             async_apply_control,
+            async_apply_offgrid_guard,
             async_apply_zero_export_guard,
             async_manage_conflicting_automation,
         )
@@ -614,6 +615,11 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
         )
         if ze_state:
             self.plan_meta["zero_export"] = ze_state
+        og_state = await async_apply_offgrid_guard(
+            self.hass, self._entry, self, snapshot
+        )
+        if og_state:
+            self.plan_meta["offgrid"] = og_state
         control_state = await async_apply_control(
             self.hass, self._entry, self, snapshot
         )

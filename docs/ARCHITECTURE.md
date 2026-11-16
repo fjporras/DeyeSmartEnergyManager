@@ -88,6 +88,7 @@ Escritura exclusivamente sobre entidades solarman (NO servicios `solarman.write_
 | Zero-export | `select.work_mode`, `switch.export_surplus`, `number.zero_export_power` | Guardia: mantiene `Zero Export To CT` / off / 20 W |
 | Límites | `number.battery_max_charging/discharging_current`, `number.grid_max_import/export_power` | Acotar potencia |
 | Modo trabajo | `select.work_mode`, `select.energy_pattern`, `select.time_of_use` | `work_mode` solo vía guardia zero-export |
+| Soporte de carga | `switch.off_grid` | Guardia: ON en slots `discharge` (única vía de descarga a carga), OFF el resto (bloquea carga de red) |
 
 Reglas de seguridad (control.py): validación de dominio + límites, min-dwell
 entre escrituras, histéresis, máx. reintentos, modo `safe` ante error persistente,
