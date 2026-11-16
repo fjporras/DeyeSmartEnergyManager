@@ -124,9 +124,11 @@ Estados: `ze_ok`, `ze_written:<entity>`, `ze_unavailable`,
 que permite a la batería descargar para servir la carga — con él OFF la
 batería queda idle y la red paga todo. Pero ON **bloquea la carga desde
 red**, así que el ejecutor lo gestiona según el slot: **ON solo cuando
-la acción es `discharge`**, OFF en cualquier otro caso. No escribe si
-`binary_sensor.<prefix>_grid` indica red ausente (la automatización de
-cortes es dueña del switch en isla), ni fuerza ON por debajo de
+la acción es `discharge`**, OFF en cualquier otro caso. No fuerza ON si
+la tensión de red L1 está por debajo de 150 V — la automatización de
+cortes es dueña del switch en isla (ojo: `binary_sensor.*_grid` marca
+`off` siempre que el intercambio con red sea cero, no es señal de
+presencia de red) — ni por debajo de
 `OFFGRID_MIN_SOC_PCT` (12 %). Al salir de los modos ejecutores, un ON
 puesto por DSEM se restaura a OFF. Estados: `og_ok:on|off`,
 `og_written:on|off`, `og_rate_limited`, `og_unavailable`,

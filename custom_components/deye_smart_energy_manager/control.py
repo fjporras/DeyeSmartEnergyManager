@@ -363,10 +363,11 @@ async def async_apply_offgrid_guard(
     ON only while the current slot expects the battery to serve the
     load (``discharge`` action); OFF otherwise because it blocks grid
     charging. Same safety gates as the other writers, plus: never
-    writes while the grid-presence sensor reports the grid absent
-    (the outage automation owns ``off_grid`` then), and never forces
-    ON below ``OFFGRID_MIN_SOC_PCT``. On leaving executor modes a
-    DSEM-owned ON state is restored to OFF. Never raises.
+    writes ON while grid voltage is below 150 V (the outage automation
+    owns ``off_grid`` then — note ``binary_sensor.*_grid`` reads off
+    whenever exchange is zero, so it is not a presence signal), and
+    never forces ON below ``OFFGRID_MIN_SOC_PCT``. On leaving executor
+    modes a DSEM-owned ON state is restored to OFF. Never raises.
     """
     try:
         return await _offgrid_guard(hass, entry, coordinator, snapshot)
@@ -422,11 +423,18 @@ async def _offgrid_guard(hass, entry, coordinator, snapshot) -> str | None:
         return "og_unavailable"
 
     if want_on:
-        # Do not fight the outage automation: if the grid is absent the
-        # island logic owns this switch.
-        grid = hass.states.get(f"binary_sensor.{prefix}_grid")
-        if grid is not None and grid.state == "off":
-            return "og_grid_down"
+        # Do not fight the outage automation: if the grid voltage is
+        # genuinely absent the island logic owns this switch. NOTE the
+        # ``binary_sensor.<prefix>_grid`` flag reads OFF whenever grid
+        # exchange is zero (verified live) — it is NOT a grid-presence
+        # signal, so voltage is the reliable check.
+        voltage = hass.states.get(f"sensor.{prefix}_grid_l1_voltage")
+        if voltage is not None and voltage.state not in _UNAVAIL:
+            try:
+                if float(voltage.state) < 150.0:
+                    return "og_grid_down"
+            except (TypeError, ValueError):
+                pass
         soc = snapshot.battery_soc_pct
         if soc is not None and soc <= OFFGRID_MIN_SOC_PCT:
             return "og_low_soc"
