@@ -139,15 +139,6 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
         tneed = max(0.0, target_stored - soc_kwh - pv_suf[0])
     soc_at_target: float | None = None
 
-    # Pre-compute, for each hour, the remaining expensive-deficit energy
-    # (AC kWh) still ahead — bounds grid charging to real need.
-    fut_deficit = [0.0] * (n + 1)
-    for i in range(n - 1, -1, -1):
-        deficit = max(0.0, inp.load_kw[i] - inp.pv_kw[i])
-        price = prices[i]
-        add = deficit if price >= exp_thr else 0.0
-        fut_deficit[i] = fut_deficit[i + 1] + add
-
     # --- Autonomous-discharge reserve floor ------------------------------
     # The inverter drains the battery for EVERY deficit hour (load - PV)
     # down to its physical cutoff — it does not consult prices and there
@@ -173,6 +164,36 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
         auto_st[j] = dis_st
         if deficit_j > 0.0:
             charge_cap_st[j] = rate
+
+    # --- PV-aware deficit credit -----------------------------------------
+    # Forecast PV surplus is stored during the day and covers subsequent
+    # deficits before any grid-charged energy does (FIFO attribution).
+    # ``pv_fut[i]`` is the expensive-deficit AC energy still ahead that
+    # PV cannot cover — cheap-hour precharge only needs to cover this
+    # remainder. Otherwise it pays for kWh that free PV would have
+    # supplied anyway, leaving the battery full at solar noon so the PV
+    # surplus is exported/curtailed instead of stored.
+    pv_pool = 0.0
+    uncovered = [0.0] * n
+    for j in range(n):
+        pv_j = inp.pv_kw[j] if j < len(inp.pv_kw) else 0.0
+        load_j = inp.load_kw[j] if j < len(inp.load_kw) else 0.0
+        surplus_j = max(0.0, pv_j - load_j)
+        pv_pool = min(
+            cap_max,
+            pv_pool
+            + min(surplus_j, max_chg_ac) * bat.charge_efficiency,
+        )
+        deficit_st = max(0.0, load_j - pv_j) / bat.discharge_efficiency
+        use = min(pv_pool, deficit_st)
+        pv_pool -= use
+        pj = prices[j]
+        if pj != _UNKNOWN and pj >= exp_thr:
+            uncovered[j] = (deficit_st - use) * bat.discharge_efficiency
+    pv_fut = [0.0] * (n + 1)
+    for i in range(n - 1, -1, -1):
+        pv_fut[i] = pv_fut[i + 1] + uncovered[i]
+
     need_end = [cap_res] * n
     run = cap_res
     for i in range(n - 1, 0, -1):
@@ -256,7 +277,7 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
             cheap_ok = (
                 price is not None
                 and price <= cheap_thr
-                and (fut_deficit[i + 1] > 0 or want_target)
+                and (pv_fut[i + 1] > 0 or want_target)
             )
             # Forced target charge: buy now only the stored energy that
             # strictly-cheaper deficit hours before the deadline cannot
@@ -292,8 +313,7 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
             if cheap_ok:
                 want_stored = max(
                     want_stored,
-                    cap_res
-                    + fut_deficit[i + 1] / bat.discharge_efficiency,
+                    cap_res + pv_fut[i + 1] / bat.discharge_efficiency,
                 )
                 if want_target:
                     want_stored = max(want_stored, soc_kwh + tneed)
@@ -357,7 +377,7 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
                 batt_w = -chg * 1000.0
                 action = ACTION_CHARGE_GRID
                 if want_target and cheap_ok \
-                        and fut_deficit[i + 1] <= 0.0:
+                        and pv_fut[i + 1] <= 0.0:
                     reason = "soc_target_precharge"
                 elif (forced_chg > 0.0 and not cheap_ok) \
                         or (guard_breach and target_binds):

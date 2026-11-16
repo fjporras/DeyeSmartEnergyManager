@@ -80,6 +80,28 @@ def test_pv_surplus_charges_battery_first():
     assert any(s.grid_power_w < 0 for s in midday)
 
 
+def test_pv_surplus_covers_expensive_deficit_no_precharge():
+    """PV forecast covering the expensive deficit must credit
+    cheap-hour precharge — otherwise the battery fills overnight and
+    the midday PV surplus is exported instead of stored."""
+    prices = _arbitrage_prices()
+    pv = [8.0 if 10 <= h <= 15 else 0.0 for h in range(24)]
+    plan_pv = optimize(_inp(prices, pv, [2.0] * 24))
+    plan_nopv = optimize(_inp(prices, [0.0] * 24, [2.0] * 24))
+    assert any(
+        s.reason == "cheap_hour_precharge" for s in plan_nopv.slots
+    )
+    assert not any(
+        s.reason == "cheap_hour_precharge" for s in plan_pv.slots
+    )
+    # PV hours still charge the battery.
+    assert any(
+        s.action == model.ACTION_CHARGE_PV
+        for s in plan_pv.slots
+        if 10 <= s.start.hour <= 15
+    )
+
+
 def test_flat_prices_no_arbitrage():
     """Flat prices: no economic cycling — the battery only holds the
     reserve floor via autonomous discharge + epsilon grid cover."""

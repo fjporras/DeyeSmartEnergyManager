@@ -87,6 +87,13 @@ precios. El plan solo controla el **permiso de carga desde red**.
    `soc_target_precharge`, `soc_target_forced_charge`), limitado al
    déficit caro/objetivo estimado restante. `tneed` es drain-aware
    (incluye la descarga autónoma esperada hasta la hora objetivo).
+   **Crédito FV (`pv_fut`, v0.6.0)**: la energía FV prevista se simula
+   en un pool FIFO — el excedente FV almacenado cubre los déficits
+   siguientes antes que la energía de red— de modo que la precarga
+   barata solo cubre el déficit caro que la FV **no puede** cubrir.
+   Sin este crédito, la batería amanecía llena, el excedente FV del
+   mediodía no cabía y se exportaba/curtaba (con el regulador de
+   tensión de la acometida, se perdía producción).
 6. Coste esperado vs baseline (batería inerte) para estimar ahorro.
 
 Cada `PlanSlot` lleva `reason` — explicable por diseño.
