@@ -2,7 +2,7 @@
 
 **Dominio:** `deye_smart_energy_manager`
 **Tipo:** integración personalizada (`custom_components`), config entry único, `iot_class: calculated`
-**Objetivo HA:** Container `core-2026.8.3` (Python ≥3.13). **Estado:** Fase 2 — scaffold SHADOW.
+**Objetivo HA:** Container `core-2026.8.3` (Python ≥3.13). **Estado:** producción — v0.8.x, control ejecutor verificado en vivo (2026-11-16).
 
 ## 1. Principios de diseño
 
@@ -34,13 +34,16 @@
 │  ├─ model.py      snapshot normalizado (signos/unidades/freshness) │
 │  ├─ prices.py     PVPC hoy/mañana + precio exportación + fallback  │
 │  ├─ forecast.py   perfiles consumo (statistics) + FV (fc_solar)    │
-│  ├─ optimizer.py  LP 24-48 h (HiGHS)  [FASE 7]                     │
-│  ├─ plan          EnergyPlan: E_imp/E_exp/E_bat±/SOC por intervalo │
-│  └─ control.py    validación + ejecución TOU (VETADO en SHADOW)    │
+│  ├─ optimizer.py  heurístico determinista 24 h (LP HiGHS = backlog)│
+│  ├─ influx.py     precios REE desde InfluxDB (fallback PVPC)      │
+│  ├─ tou.py        diagnóstico TOU (read-only)                     │
+│  ├─ plan          EnergyPlan: acción/W batt/W grid/SOC por hora    │
+│  └─ control.py    ejecutor: switch carga + guardias zero-export/   │
+│                   off_grid + conflicto automatización PVPC        │
 └──────────────┬─────────────────────────────────────────────────────┘
                │ coordinator.data
                ▼
-   sensor.py · select.py (modo) · number.py/switch.py (futuros parámetros)
+   sensor.py · select.py (modo/objetivos) · number.py (SOC/time) · dashboard
                │
                ▼
    Panel Lovelace (fase 13) · diagnostics.py · logbook de decisiones
@@ -95,29 +98,26 @@ entre escrituras, histéresis, máx. reintentos, modo `safe` ante error persiste
 registro `logbook` de cada orden y su motivo. Protecciones del inversor
 (`*_protection_*`, SOC shutdown/low, tensiones) **jamás** se modifican.
 
-## 6. Optimizador (FASE 7 — decisión pendiente de librería)
+## 6. Optimizador (heurístico v1 implementado; LP = backlog)
 
-- **Formulación:** LP por intervalos Δt=1 h, horizonte 24-48 h.
-- **Variables por intervalo:** `e_imp, e_exp, e_pv_used, e_bat_chg, e_bat_dis,
-  soc, e_ev, e_acs, e_pv_curt`.
-- **Objetivo:** `Σ price_imp·e_imp − price_exp·e_exp + c_deg·(e_chg+e_dis)
-  + c_loss·pérdidas + penalizaciones`.
-- **Restricciones:** balance por intervalo; `soc_min≤soc≤soc_max`;
-  potencias máx; eficiencias; reserva configurable; necesidades EV/ACS
-  (inactivas mientras no haya entidades).
-- **Candidatos de solver:** `highspy` (HiGHS, wheels musllinux, ligero) — preferido;
-  `scipy.optimize.linprog` (usa HiGHS, pero ~40 MB); fallback heurístico propio si
-  la dependencia no es instalable en el contenedor. **Decisión registrada en
-  docs/OPTIMIZATION.md al implementar.**
+- **Implementado:** heurístico determinista por intervalos Δt=1 h,
+  horizonte 24 h (`optimizer.py`). Detalle completo en
+  `docs/OPTIMIZATION.md` §6. Incluye física real de descarga autónoma,
+  suelo de trayectoria (reserva + objetivo SOC), crédito FV para
+  precarga y arbitrador precio.
+- **Backlog LP:** si el heurístico se queda corto, formulación LP por
+  intervalos (ver OPTIMIZATION.md §1-3) con `highspy`/HiGHS; comparte
+  `PlannerInput`/`EnergyPlan` → recambio local a `optimizer.optimize()`.
 
 ## 7. Precios
 
-- Importación: `sensor.esios_pvpc` (`price_00h…23h` del día en curso;
-  `next_day` no expuesto → horizonte usa precio de hoy + marca
-  `prices_incomplete` hasta la publicación ~20:35).
-- Exportación: option `export_price_eur_kwh` (default 0,14 — valor SolarNet,
-  confirmar contrato con el usuario).
-- Fallback ante datos ausentes: estrategia `price_fallback` (conservadora).
+- **Primario:** InfluxDB bucket `ree_indicators`, measurement
+  `electricity_price`, field `precio_kwh`, tags `tipo=consumo|excedentes`
+  (vía la config entry `influxdb` instalada; solo lectura).
+- **Fallback:** `sensor.esios_pvpc` (`price_XXh` del día en curso) +
+  precio de exportación fijo (`export_price_eur_kwh`, default 0,14).
+- Huecos en la serie → mediana del horizonte + warning `price_gaps_filled`;
+  sin datos → `no_price_data`, sin arbitraje.
 
 ## 8. Previsiones
 
@@ -128,16 +128,20 @@ registro `logbook` de cada orden y su motivo. Protecciones del inversor
 - **Consumo:** perfiles desde `statistics` (`total_load_consumption`,
   `load_power` horario) por hora/día-semana; incertidumbre = dispersión.
 
-## 9. Entidades DSEM (convención `sensor.dsem_*`)
+## 9. Entidades DSEM (nombres reales en HA)
 
-Implementadas en scaffold: `sensor.dsem_optimization_status`,
-`sensor.dsem_current_strategy`, `sensor.dsem_grid_power`,
-`sensor.dsem_pv_power`, `sensor.dsem_battery_power`,
-`sensor.dsem_battery_soc`, `select.dsem_mode`.
-
-Fases posteriores: `predicted_grid_import/export`, `predicted_energy_cost`,
-`estimated_savings`, `battery_soc_target`, `next_charge/discharge_period`,
-`last_optimization`, `last_error`, planes horarios como atributos acotados.
+- `sensor.deye_smart_energy_manager_estado_del_optimizador` — modo,
+  `missing/stale_entities`, `control_enabled`.
+- `sensor.deye_smart_energy_manager_proxima_accion_del_plan` — acción
+  actual + slots horarios + meta (`zero_export`, `offgrid`, `control`,
+  `tou_*`, `pv_bias`, `nowcast_kw`, `ev_*`, `price_source`…).
+- `sensor.deye_smart_energy_manager_estrategia_actual`.
+- `select.deye_smart_energy_manager_modo` — modo (rechaza ejecutores
+  sin `enable_control`).
+- `number.deye_smart_energy_manager_soc_objetivo` +
+  `time.deye_smart_energy_manager_hora_objetivo` — objetivo `target_soc`.
+- Historial de planes: `config/deye_smart_energy_manager/plan_log.jsonl`
+  (una línea JSON por hora de inicio de plan, rotación ~2 MB).
 
 ## 10. Ciclo de vida y recursos
 
@@ -150,12 +154,12 @@ Fases posteriores: `predicted_grid_import/export`, `predicted_energy_cost`,
 - `diagnostics.py`: entry data/options (sin secretos — solo entity_ids y
   parámetros) + último snapshot + último plan/errores.
 
-## 11. Despliegue (pendiente)
+## 11. Despliegue
 
-El MCP no tiene acceso a `/config`. Procedimiento previsto: copia del paquete a
-`<config>/custom_components/deye_smart_energy_manager/` vía SSH + reinicio
-controlado autorizado por el usuario → alta en UI → modo SHADOW.
-Detallado en `docs/DEPLOYMENT.md` (a redactar en fase 16).
+**Vía HACS (producción):** repo público
+`github.com/fjporras/DeyeSmartEnergyManager`, releases con tag
+(`v0.x.y`). HACS → actualizar → reiniciar HA. Procedimientos manuales
+y checklist en `docs/DEPLOYMENT.md`.
 
 ## 12. Conflictos externos
 
@@ -165,3 +169,10 @@ ejecutor + `enable_control` DSEM la desactiva automáticamente
 (`pvpc_automation_entity`, opción configurable) y la restaura al
 salir del modo ejecutor (`control.py`, `conflict_suspended`/
 `conflict_restored` en `plan_meta.control`).
+
+`automation.aviso_de_corte_de_red` también escribe `switch.off_grid`
+(ON al detectar corte de tensión en cualquier fase, OFF al restablecer).
+DSEM no escribe `off_grid` cuando la tensión L1 < 150 V (la guardia
+cede el control a la automatización en isla) y restaura a OFF al salir
+de modos ejecutores un ON propio. `binary_sensor.*_grid` no es señal
+de presencia de red: marca `off` siempre que el intercambio sea cero.

@@ -152,3 +152,23 @@ línea JSON a `config/deye_smart_energy_manager/plan_log.jsonl`
 (rotación a ~2 MB) con los 24 slots (acción, W batería, W red, SOC,
 precio) y la meta. A partir de su despliegue se podrá comparar el
 plan previsto vs los datos reales a T+24 h automáticamente.
+
+## 8. Hallazgos en operación real (post-validación, nov-2026)
+
+Tras el despliegue en SHADOW y la entrada en modos ejecutores se
+verificaron en vivo varios comportamientos que el modelo asumía:
+
+| Fecha | Hallazgo | Consecuencia |
+|---|---|---|
+| 14-11 | Incidente: entidades Deye `unavailable` ~6 h por caída de comunicaciones WAN (no corte eléctrico — tensión nunca <100 V, recuperación simultánea de integraciones) | Automatización de aviso ampliada (device_state/Alarm/comms/SOC<20%) |
+| 14-11 | SOC cayó a ~14 % con `off_grid` OFF — la batería no descargó | Confirmó que `off_grid` gobierna la descarga |
+| 15-11 | `off_grid` ON bloquea la carga de red (battery_power +2,2 kW → −5 kW al apagarlo) | Regla operativa: OFF para cargar, ON para descargar |
+| 16-11 | `energy_pattern` y `work_mode` (`Zero Export To Load`/`CT`) **no** gobiernan la descarga — probado con guardia en shadow | `off_grid` es el único interruptor de descarga a carga |
+| 16-11 | `binary_sensor.*_grid` marca `off` siempre que el intercambio sea 0 W — no es señal de presencia de red | La guardia off_grid usa tensión L1 <150 V (v0.8.1) |
+| 16-11 | Con `work_mode=Zero Export To CT` el inversor vertió ~2 kW pese a configuración correcta; `external_power` oscilaba ±3 kW cada ~5 s | Posible CT descompensado o `microinverter_export_cut_off` OFF — pendiente de experimento |
+| 16-11 | Precarga nocturna llenaba la batería al 100 % y el excedente FV no cabía (vertido/curtail) | Crédito FV en el optimizador (v0.6.0) |
+| 16-11 | `last_updated` envejecía en sensores a valor constante (0 W) → stale permanente | Stale usa `last_reported` (v0.5.1) |
+
+Versiones publicadas: v0.4.0 (física descarga autónoma), v0.5.0
+(conflicto PVPC), v0.5.1 (fix stale), v0.6.0 (crédito FV), v0.7.0
+(guardia zero-export), v0.8.0/v0.8.1 (guardia off_grid + fix tensión).

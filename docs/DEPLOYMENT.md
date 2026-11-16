@@ -86,9 +86,9 @@ ssh usuario@<host> 'docker restart homeassistant'
 | # | Comprobación | Cómo |
 |---|---|---|
 | 1 | Integración cargada sin errores | Ajustes → Dispositivos → DSEM; `ha_get_logs` buscar `deye_smart_energy_manager` |
-| 2 | 8 entidades `sensor.dsem_*` + `select.dsem_mode` creadas | Desarrollador → Estados |
-| 3 | `sensor.dsem_optimization_status` = `ok` (o `degraded` con `missing_entities` indicando qué falta) | Estado del sensor |
-| 4 | `sensor.dsem_plan_next_action` con `plan_available: true` y 24+ slots | Atributos del sensor |
+| 2 | Entidades `sensor.deye_smart_energy_manager_*` + `select.deye_smart_energy_manager_modo` creadas | Desarrollador → Estados |
+| 3 | `sensor.deye_smart_energy_manager_estado_del_optimizador` = `ok` (o con `missing_entities`/`stale_entities` indicando qué falta) | Estado del sensor |
+| 4 | `sensor.deye_smart_energy_manager_proxima_accion_del_plan` con `plan_available: true` y 24+ slots | Atributos del sensor |
 | 5 | **Series InfluxDB**: atributos `price_source` (`influxdb`/`pvpc`), `import_series`, `export_series` → confirmar que el auto-descubrimiento encontró los measurement/field correctos del bucket `ree_indicators` | Atributos del sensor / diagnóstico descargable |
 | 6 | Coste esperado y ahorro coherentes (€ razonables) | `expected_cost_eur` vs `baseline_cost_eur` |
 | 7 | **Ninguna escritura**: `control_enabled=false`, modo `shadow`, sin cambios en entidades del Deye | Historial del `switch.…_battery_grid_charging` sin cambios atribuibles a DSEM |
@@ -108,9 +108,23 @@ ssh usuario@<host> \
 - No escribe en ninguna entidad, servicio ni registro Modbus.
 - No modifica `configuration.yaml` ni `.storage`.
 
-## 9. Próximas iteraciones tras validar SHADOW
+## 9. Releases y actualizaciones
 
-- Ajustar `battery_usable_kwh` con datos reales (SOC vs kWh BMS).
-- Verificar `import_series`/`export_series` de InfluxDB contra PVPC/REE.
-- Observar error de la curva FV sintetizada vs `froniussymo_alimentacion_ca`.
-- Solo entonces: discutir la fase de control real (gating ya implementado).
+- Cada versión se publica con `git tag vX.Y.Z` + push → HACS la ofrece
+  como actualización. Historial: v0.4.0 física descarga autónoma,
+  v0.5.x conflicto PVPC + fix stale, v0.6.0 crédito FV,
+  v0.7.0 guardia zero-export, v0.8.x guardia off_grid.
+- **Activación del control** (una sola vez): Opciones → `enable_control`
+  = ON → seleccionar modo ejecutor (`auto`…) en
+  `select.deye_smart_energy_manager_modo`. La automatización PVPC se
+  pausa sola mientras haya modo ejecutor.
+- En `shadow`/`manual`/`safe` DSEM no escribe nada; un `off_grid` ON
+  puesto por DSEM se restaura a OFF al salir del modo ejecutor.
+
+## 10. Iteraciones futuras posibles
+
+- Perfil de carga por día-tipo (laborable/fin de semana).
+- Solcast para curva FV horaria + intervalos P10/P90.
+- Optimizer LP con HiGHS si el heurístico se queda corto.
+- Experimento pendiente: `microinverter_export_cut_off` y diagnóstico
+  de CTs (vertido ~2 kW observado con zero-export "correcto").

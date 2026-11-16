@@ -85,8 +85,8 @@ Indicadores REE/ESIOS origen: **1001** = precio consumo,
 **1739** = precio excedentes/vertido.
 
 Las series usadas quedan visibles en los atributos de
-`sensor.dsem_plan_next_action` (`import_series`/`export_series`,
-`price_source`).
+`sensor.deye_smart_energy_manager_proxima_accion_del_plan`
+(`import_series`/`export_series`, `price_source`).
 
 ### Control
 
@@ -97,12 +97,19 @@ Las series usadas quedan visibles en los atributos de
 | `grid_charge_switch_entity` | `switch.deye_…_battery_grid_charging` | Interruptor que escribe el ejecutor (acción `charge_grid` → on; resto → off) |
 | `pvpc_automation_entity` | `automation.pvpc_carga_bateria_deye_en_horas_baratas` | Automatización legada que comparte el interruptor; DSEM la pausa/restaura automáticamente |
 
-#### Ejecutor v1 (`control.py`)
+#### Ejecutor (`control.py`)
 
-Con `enable_control` activo y un modo ejecutor, el coordinator traduce
-la acción del slot actual a **una única escritura**: el interruptor
-`battery_grid_charging` del Deye (permiso de carga desde red — el
-inversor sigue decidiendo potencia y tiempos). No escribe nada más.
+Con `enable_control` activo y un modo ejecutor, el coordinator escribe
+como máximo **un cambio por entidad y ciclo** sobre tres superficies
+(verificadas en vivo el 2026-11-16):
+
+1. `switch.battery_grid_charging` — permiso de carga desde red
+   (`charge_grid` → on; resto → off). El inversor decide potencia y
+   tiempos. Estado en `plan_meta.control`.
+2. **Guardia zero-export** — `work_mode`/`export_surplus`/
+   `zero_export_power` (ver abajo). Estado en `plan_meta.zero_export`.
+3. **Guardia `off_grid`** — ON solo en slots `discharge`, OFF el resto
+   (ver abajo). Estado en `plan_meta.offgrid`.
 
 **Guardia zero-export** (`plan_meta.zero_export`): en el mismo ciclo
 verifica que el inversor no pueda verter a la red — la vivienda no
@@ -239,6 +246,10 @@ del perfil (`min(profile)`), no por el boost VE.
 
 ## 4. Entidades propias creadas
 
-Ver `docs/ARCHITECTURE.md` §9. En el scaffold actual:
-`sensor.dsem_*` (estado, estrategia, potencias normalizadas) y
-`select.dsem_mode`.
+Nombres reales de las entidades propias:
+`sensor.deye_smart_energy_manager_estado_del_optimizador`,
+`sensor.deye_smart_energy_manager_proxima_accion_del_plan`,
+`sensor.deye_smart_energy_manager_estrategia_actual`,
+`select.deye_smart_energy_manager_modo`,
+`number.deye_smart_energy_manager_soc_objetivo` y
+`time.deye_smart_energy_manager_hora_objetivo`.

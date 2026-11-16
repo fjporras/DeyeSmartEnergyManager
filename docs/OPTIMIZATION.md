@@ -62,9 +62,19 @@ así que el recambio será local a `optimizer.optimize()`.
 Desde v0.4.0 el modelo refleja la física real del inversor: **la batería
 descarga autónomamente en TODA hora con déficit** (`carga − FV`) hasta su
 corte físico (`auto_floor_pct`, leído de
-`number.<inversor>_battery_shutdown_soc` ≈ 15 %). No existe switch de
+`number.<inversor>_battery_shutdown_soc` ≈ 10-15 %). No existe switch de
 descarga ni decisión económica en ese flujo — el inversor no consulta
-precios. El plan solo controla el **permiso de carga desde red**.
+precios.
+
+**Matiz de ejecución (verificado 2026-11-16):** en este inversor la
+descarga a la carga solo ocurre con `off_grid` ON — con él OFF la
+batería queda idle y la red paga el déficit. `energy_pattern` y
+`work_mode` no gobiernan la descarga. Por eso el plan sigue modelando
+`auto_discharge` pero el ejecutor (v0.8.x) activa `off_grid` en los
+slots `discharge` y lo desactiva en `charge_grid` (donde ON bloquearía
+la carga de red). Si `off_grid` queda OFF por una razón externa, el
+plan sobreestima el ahorro: síntoma = `external_power` importando en
+horas `discharge`.
 
 1. Umbrales por cuantiles sobre los precios del horizonte: barato ≤ Q25,
    caro ≥ max(Q75, suelo de arbitraje con eficiencias+degradación).
@@ -89,7 +99,7 @@ precios. El plan solo controla el **permiso de carga desde red**.
    (incluye la descarga autónoma esperada hasta la hora objetivo).
    **Crédito FV (`pv_fut`, v0.6.0)**: la energía FV prevista se simula
    en un pool FIFO — el excedente FV almacenado cubre los déficits
-   siguientes antes que la energía de red— de modo que la precarga
+   siguientes antes que la energía de red — de modo que la precarga
    barata solo cubre el déficit caro que la FV **no puede** cubrir.
    Sin este crédito, la batería amanecía llena, el excedente FV del
    mediodía no cabía y se exportaba/curtaba (con el regulador de

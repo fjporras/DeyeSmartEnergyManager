@@ -8,11 +8,15 @@ SUN-15K-SG05LP3-EU-SM2 y batería SEPLOS (~32 kWh nominales).
 
 ## Estado del proyecto
 
-- **Fase actual:** scaffold completo + planificador horario SHADOW
-  (precios PVPC/InfluxDB, previsión FV, perfil de consumo). 21 tests verdes.
-- **Modo actual:** SHADOW — calcula y registra decisiones sin ejecutarlas.
-- El control real queda vetado hasta validación técnica y autorización explícita
-  (`enable_control` en opciones + modo ejecutor).
+- **Versión:** v0.8.1 — integración en producción con **control real
+  verificado en vivo** (modo `auto` + `enable_control`).
+- **Capacidades:** planificador horario 24 h (heurístico determinista,
+  46 tests), precios PVPC/InfluxDB, previsión FV con corrección de sesgo,
+  perfil de carga con cuantil+nowcast+VE, guardia zero-export,
+  guardia `off_grid` (descarga a carga) y gestión automática del
+  conflicto con la automatización PVPC.
+- **Modo por defecto:** `shadow` — el control exige `enable_control`
+  en opciones + modo ejecutor.
 
 ## Instalación (HACS)
 

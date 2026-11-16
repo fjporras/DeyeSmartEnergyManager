@@ -343,4 +343,32 @@ Para DSEM (LP horario 24-48 h) la precisión de Forecast.Solar es suficiente; el
 
 ---
 
+## 10. Hallazgos de comportamiento en vivo (2026-11-15/16, post-auditoría)
+
+Verificados con escrituras controladas y observación; no estaban en la
+auditoría estática:
+
+- **`switch.*_off_grid` gobierna la descarga a carga**: con él OFF la
+  batería queda `idle` y la red sirve el 100 % de la carga aunque el SOC
+  sea alto; con él ON la batería descarga y `external_power` = 0. Es el
+  ÚNICO interruptor que habilita descarga a la vivienda — `energy_pattern`
+  (`Battery First`/`Load First`) y `work_mode` (`Zero Export To CT`/
+  `Zero Export To Load`) **no** la gobiernan (probado).
+- **`off_grid` ON bloquea la carga desde red**: `battery_grid_charging`
+  ON no produce carga (~2 min de retardo al cambiar).
+- **`binary_sensor.*_grid` ≠ presencia de red**: marca `off` siempre que
+  `external_power` = 0 (p. ej. con `off_grid` ON y balance batería-carga).
+  La presencia real se verifica por tensión (`grid_l*_voltage`).
+- **Oscilación zero-export**: con `work_mode=Zero Export To CT` y
+  configuración correcta (`export_surplus` off, `zero_export_power` 20 W)
+  se observó vertido ~2 kW con `external_power` oscilando ±3 kW cada
+  ~5 s — el lazo regulador caza el cero sin sostenerlo. Causa no
+  resuelta: sospechosos `microinverter_export_cut_off` (OFF) y CTs.
+- **Reboot/config-sync masivo**: el 16-11 ~14:28 todas las entidades
+  Deye cambiaron a la vez (`last_changed` idéntico) — evento de
+  resincronización del dispositivo; `energy_pattern` quedó en
+  `Battery First` (la auditoría registró `Load First`).
+
+---
+
 *Generado por auditoría MCP de solo lectura. Ninguna entidad fue escrita ni ningún servicio de control ejecutado (excepto `weather.get_forecasts`, consulta de solo lectura).*
