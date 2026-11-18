@@ -49,6 +49,7 @@ from .const import (
     CONF_PVPC_AUTOMATION_ENTITY,
     CONF_PV_FORECAST_ENTITY,
     CONF_PV_FORECAST_TOMORROW_ENTITY,
+    CONF_PV_HEADROOM_ENABLED,
     CONF_PV_PEAK_TODAY_ENTITY,
     CONF_PV_PEAK_TOMORROW_ENTITY,
     CONF_PV_POWER_ENTITY,
@@ -88,6 +89,7 @@ from .const import (
     DEFAULT_PVPC_AUTOMATION_ENTITY,
     DEFAULT_PV_FORECAST_ENTITY,
     DEFAULT_PV_FORECAST_TOMORROW_ENTITY,
+    DEFAULT_PV_HEADROOM_ENABLED,
     DEFAULT_PV_PEAK_TODAY_ENTITY,
     DEFAULT_PV_PEAK_TOMORROW_ENTITY,
     DEFAULT_PV_POWER_ENTITY,
@@ -299,6 +301,7 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                 return self.async_create_entry(data=user_input)
         options = {
             CONF_LOAD_PROFILE_QUANTILE: DEFAULT_LOAD_PROFILE_QUANTILE,
+            CONF_PV_HEADROOM_ENABLED: DEFAULT_PV_HEADROOM_ENABLED,
             CONF_GRID_CHARGE_SWITCH_ENTITY: DEFAULT_GRID_CHARGE_SWITCH_ENTITY,
             CONF_PVPC_AUTOMATION_ENTITY: DEFAULT_PVPC_AUTOMATION_ENTITY,
             **self.config_entry.options,
@@ -442,6 +445,9 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                                 mode=selector.NumberSelectorMode.BOX,
                             )
                         ),
+                        vol.Required(
+                            CONF_PV_HEADROOM_ENABLED
+                        ): selector.BooleanSelector(),
                         vol.Required(CONF_EXPORT_PRICE_EUR_KWH): selector.NumberSelector(
                             selector.NumberSelectorConfig(
                                 min=0,
@@ -538,6 +544,9 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                     ),
                     CONF_OPTIMIZE_INTERVAL_MIN: options.get(
                         CONF_OPTIMIZE_INTERVAL_MIN, DEFAULT_OPTIMIZE_INTERVAL_MIN
+                    ),
+                    CONF_PV_HEADROOM_ENABLED: options.get(
+                        CONF_PV_HEADROOM_ENABLED, DEFAULT_PV_HEADROOM_ENABLED
                     ),
                     CONF_EXPORT_PRICE_EUR_KWH: options.get(
                         CONF_EXPORT_PRICE_EUR_KWH, DEFAULT_EXPORT_PRICE_EUR_KWH

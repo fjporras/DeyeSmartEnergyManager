@@ -61,6 +61,7 @@ compatible. Los errores se muestran por campo.
 | `step_minutes` | 60 |
 | `optimize_interval_min` | 15 |
 | `load_profile_quantile` | 0.70 | Cuantil del perfil horario de carga (P70 cubre picos de VE sin diluirlos) |
+| `pv_headroom_enabled` | true | Reservar margen de batería para el excedente FV previsto del mismo día — limita la carga de red para que el sol no encuentre la batería llena (v0.9.0) |
 | `export_price_eur_kwh` | 0.14 (fallback si no hay serie horaria de vertido) |
 | `price_fallback` | `conservative` |
 

@@ -35,6 +35,7 @@ from .const import (
     CONF_PRICE_IMPORT_ENTITY,
     CONF_PV_FORECAST_ENTITY,
     CONF_PV_FORECAST_TOMORROW_ENTITY,
+    CONF_PV_HEADROOM_ENABLED,
     CONF_PV_PEAK_TODAY_ENTITY,
     CONF_PV_PEAK_TOMORROW_ENTITY,
     CONF_PV_POWER_ENTITY,
@@ -53,6 +54,7 @@ from .const import (
     DEFAULT_MAX_CHARGE_W,
     DEFAULT_MAX_DISCHARGE_W,
     DEFAULT_MODE,
+    DEFAULT_PV_HEADROOM_ENABLED,
     DEFAULT_TARGET_TIME,
     MODE_TARGET_SOC,
     DEFAULT_RESERVE_SOC_PCT,
@@ -401,6 +403,10 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
                         target_warn = "soc_target_out_of_horizon"
                 else:
                     target_warn = "soc_target_not_configured"
+            pv_headroom = bool(
+                opts.get(CONF_PV_HEADROOM_ENABLED, DEFAULT_PV_HEADROOM_ENABLED)
+            )
+            self.plan_meta["pv_headroom"] = "on" if pv_headroom else "off"
             plan = optimize(
                 PlannerInput(
                     first_hour=price_series.first_hour,
@@ -417,6 +423,7 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
                     export_prices=export_prices,
                     soc_target_pct=target_soc_pct,
                     target_idx=target_idx,
+                    pv_headroom_enabled=pv_headroom,
                 )
             )
             if target_warn:

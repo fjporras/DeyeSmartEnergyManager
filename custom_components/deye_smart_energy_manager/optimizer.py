@@ -65,6 +65,7 @@ class PlannerInput:
     export_prices: tuple[float | None, ...] | None = None  # hourly, wins
     soc_target_pct: float | None = None   # target_soc mode constraint
     target_idx: int | None = None         # slot that must end >= target
+    pv_headroom_enabled: bool = True      # reserve room for same-day PV
 
 
 def _quantile(sorted_vals: list[float], q: float) -> float:
@@ -224,6 +225,33 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
         drain_suf[target_idx + 1] if target_idx is not None else 0.0
     )
 
+    # --- PV headroom -----------------------------------------------------
+    # ``pv_tail[i]`` is the stored kWh of PV surplus still expected after
+    # hour i on the SAME calendar day (rate-limited like real charging).
+    # Grid charging is capped so the battery keeps enough room for it:
+    # paid energy stored now would otherwise sit in the battery at solar
+    # noon and force the free PV surplus to be exported/curtailed.
+    # PV-surplus charging itself is NOT capped — it is the energy the
+    # headroom is reserved for. The reserve/target floors always win.
+    pv_tail = [0.0] * n
+    if inp.pv_headroom_enabled:
+        sur_st = [0.0] * n
+        for j in range(n):
+            pv_j = inp.pv_kw[j] if j < len(inp.pv_kw) else 0.0
+            load_j = inp.load_kw[j] if j < len(inp.load_kw) else 0.0
+            sur_st[j] = min(
+                max(0.0, pv_j - load_j), max_chg_ac
+            ) * bat.charge_efficiency
+        run = 0.0
+        cur_day = None
+        for i in range(n - 1, -1, -1):
+            day_i = (inp.first_hour + timedelta(hours=i)).date()
+            if day_i != cur_day:
+                cur_day = day_i
+                run = 0.0
+            pv_tail[i] = run
+            run += sur_st[i]
+
     slots: list[PlanSlot] = []
     cost = baseline = 0.0
     reserve_breach = False
@@ -324,7 +352,14 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
                 )
             # Any charge also tops the trajectory up to the floor.
             want_stored = max(want_stored, req_end[i])
-            headroom_ac = max(0.0, cap_max - soc_kwh) \
+            # PV headroom: grid charging may not fill the room reserved
+            # for same-day PV surplus still to come. An explicit SOC
+            # target before its deadline overrides the reserve — the
+            # user's target takes priority over PV headroom.
+            store_cap = cap_max
+            if inp.pv_headroom_enabled and not want_target:
+                store_cap = max(req_end[i], cap_max - pv_tail[i])
+            headroom_ac = max(0.0, store_cap - soc_kwh) \
                 / bat.charge_efficiency
             econ_chg = 0.0
             if econ_active:

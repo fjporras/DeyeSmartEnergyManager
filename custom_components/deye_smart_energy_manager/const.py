@@ -45,6 +45,7 @@ CONF_ENABLE_CONTROL = "enable_control"
 CONF_GRID_CHARGE_SWITCH_ENTITY = "grid_charge_switch_entity"
 CONF_PVPC_AUTOMATION_ENTITY = "pvpc_automation_entity"
 CONF_LOAD_PROFILE_QUANTILE = "load_profile_quantile"
+CONF_PV_HEADROOM_ENABLED = "pv_headroom_enabled"
 
 # InfluxDB hourly price source (optional; uses the influxdb config entry)
 CONF_INFLUX_PRICES_ENABLED = "influx_prices_enabled"
@@ -159,6 +160,7 @@ DEFAULT_STEP_MINUTES = 60
 DEFAULT_OPTIMIZE_INTERVAL_MIN = 15
 DEFAULT_EXPORT_PRICE_EUR_KWH = 0.14
 DEFAULT_LOAD_PROFILE_QUANTILE = 0.70
+DEFAULT_PV_HEADROOM_ENABLED = True
 
 # Coordinator
 UPDATE_INTERVAL_S = 60

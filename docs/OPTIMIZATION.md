@@ -104,6 +104,20 @@ horas `discharge`.
    Sin este crédito, la batería amanecía llena, el excedente FV del
    mediodía no cabía y se exportaba/curtaba (con el regulador de
    tensión de la acometida, se perdía producción).
+   **Headroom FV (`pv_tail`, v0.9.0)**: `pv_tail[i]` es la energía FV
+   excedentaria prevista después de la hora `i` **el mismo día
+   natural** (limitada por la tasa de carga, en kWh almacenados). La
+   carga de red queda topada a `max(req_end[i], soc_max − pv_tail[i])`
+   para reservar sitio al sol que aún no ha llegado: la energía de red
+   pagada a precio valle no debe ocupar el sitio que necesita el
+   excedente FV gratuito del mediodía (que si no cabe se exporta o
+   curta). La propia carga `charge_pv` NO se limita — es la energía
+   para la que se reserva el margen. Los suelos de reserva/objetivo
+   siempre prevalecen, y un objetivo SOC explícito pendiente anula el
+   límite hasta su hora límite. La FV del día siguiente no restringe
+   la carga de esta noche (la batería se descarga durante la noche de
+   todos modos). Si el forecast FV falla (día nublado), el plan se
+   recalcula cada ~15 min y el margen desaparece solo.
 6. Coste esperado vs baseline (batería inerte) para estimar ahorro.
 
 Cada `PlanSlot` lleva `reason` — explicable por diseño.

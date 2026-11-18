@@ -102,6 +102,67 @@ def test_pv_surplus_covers_expensive_deficit_no_precharge():
     )
 
 
+def test_pv_headroom_limits_grid_precharge():
+    """With PV surplus expected later the same day, cheap-hour grid
+    charging must leave battery headroom for it — otherwise paid energy
+    fills the battery at solar noon and the free PV is exported.
+    Disabling the feature restores fill-to-cap behaviour."""
+    # Cheap 00-05, expensive 19-23 (EV peak the PV cannot cover).
+    prices = [
+        0.05 if h <= 5 else 0.30 if 19 <= h <= 23 else 0.15
+        for h in range(24)
+    ]
+    pv = [8.0 if 10 <= h <= 15 else 0.0 for h in range(24)]
+    load = [7.0 if 19 <= h <= 23 else 2.0 for h in range(24)]
+    base = _inp(prices, pv, load).__dict__
+    plan_on = optimize(
+        PlannerInput(**{**base, "pv_headroom_enabled": True})
+    )
+    plan_off = optimize(
+        PlannerInput(**{**base, "pv_headroom_enabled": False})
+    )
+
+    def grid_kwh_before_pv(plan):
+        return sum(
+            -s.battery_power_w / 1000.0
+            for s in plan.slots[:10]
+            if s.action == model.ACTION_CHARGE_GRID
+        )
+
+    assert grid_kwh_before_pv(plan_on) < grid_kwh_before_pv(plan_off)
+    # PV-surplus charging itself is never capped by the headroom.
+    assert any(
+        s.action == model.ACTION_CHARGE_PV
+        for s in plan_on.slots
+        if 10 <= s.start.hour <= 15
+    )
+
+
+def test_pv_headroom_ignores_next_day_pv():
+    """PV forecast for TOMORROW must not constrain today's charging —
+    the battery drains overnight anyway, freeing the room. The headroom
+    cap only looks at PV surplus later the SAME calendar day."""
+    # 30 h horizon: slots 0-23 = Oct 18, slots 24-29 = Oct 19.
+    prices = [0.05 if h % 24 <= 5 else 0.15 for h in range(30)]
+    pv = [0.0] * 26 + [8.0] * 4  # Oct 19 02:00-05:00 only
+    load = [2.0] * 30
+    base = _inp(prices, pv, load).__dict__
+    plan_on = optimize(
+        PlannerInput(**{**base, "pv_headroom_enabled": True})
+    )
+    plan_off = optimize(
+        PlannerInput(**{**base, "pv_headroom_enabled": False})
+    )
+    # Every Oct-18 slot has zero same-day PV tail -> identical plans.
+    assert [
+        (s.action, s.battery_power_w, s.soc_end_pct)
+        for s in plan_on.slots[:24]
+    ] == [
+        (s.action, s.battery_power_w, s.soc_end_pct)
+        for s in plan_off.slots[:24]
+    ]
+
+
 def test_flat_prices_no_arbitrage():
     """Flat prices: no economic cycling — the battery only holds the
     reserve floor via autonomous discharge + epsilon grid cover."""
