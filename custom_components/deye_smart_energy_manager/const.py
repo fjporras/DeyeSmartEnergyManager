@@ -4,7 +4,7 @@ from __future__ import annotations
 DOMAIN = "deye_smart_energy_manager"
 NAME = "Deye Smart Energy Manager"
 MANUFACTURER = "DSEM"
-VERSION = "0.1.0"
+VERSION = "0.9.1"
 
 # ---------------------------------------------------------------------------
 # Config entry data keys (entity_id mappings chosen in the config flow)
@@ -83,6 +83,7 @@ MODE_SOLAR_PRIORITY = "solar_priority"
 MODE_ECONOMIC = "economic"
 MODE_BACKUP = "backup"
 MODE_TARGET_SOC = "target_soc"
+MODE_AUTO_EXPORT = "auto_export"  # executor that allows grid export
 MODE_MANUAL = "manual"
 MODE_SAFE = "safe"
 
@@ -95,12 +96,13 @@ MODES: tuple[str, ...] = (
     MODE_BACKUP,
     MODE_TARGET_SOC,
     MODE_AUTO,
+    MODE_AUTO_EXPORT,
 )
 
 # Modes allowed to issue control orders (still require CONF_ENABLE_CONTROL)
 CONTROL_MODES: frozenset[str] = frozenset(
-    {MODE_AUTO, MODE_SOLAR_PRIORITY, MODE_ECONOMIC, MODE_BACKUP,
-     MODE_TARGET_SOC}
+    {MODE_AUTO, MODE_AUTO_EXPORT, MODE_SOLAR_PRIORITY, MODE_ECONOMIC,
+     MODE_BACKUP, MODE_TARGET_SOC}
 )
 
 DEFAULT_MODE = MODE_SHADOW

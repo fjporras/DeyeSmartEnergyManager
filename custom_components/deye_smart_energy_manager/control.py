@@ -5,8 +5,10 @@ Writable surface (all gated by mode + ``enable_control``):
     permission; the inverter's own logic decides power and timing.
   * Zero-export guard — keeps ``work_mode`` at ``Zero Export To CT``,
     ``export_surplus`` off and ``zero_export_power`` at 20 W, so the
-    inverter never exports to the grid (the household has no physical
-    export path; surplus PV must go to the battery or be curtailed).
+    export configuration — ``auto_export`` enforces ``Export First`` +
+    ``export_surplus`` on (surplus PV may be sold to the grid);
+    every other executor mode enforces zero-export (``Zero Export To
+    CT`` + ``export_surplus`` off + 20 W margin).
   * ``off_grid`` guard — ON only while the plan expects the battery to
     serve the load (``discharge`` slots), OFF otherwise because it
     blocks grid charging. Verified live: this inverter only discharges
@@ -39,6 +41,7 @@ from .const import (
     CONTROL_MODES,
     DEFAULT_GRID_CHARGE_SWITCH_ENTITY,
     DEFAULT_PVPC_AUTOMATION_ENTITY,
+    MODE_AUTO_EXPORT,
     DOMAIN,
 )
 from .model import (
@@ -54,6 +57,12 @@ CONTROL_VERIFY_TIMEOUT_S = 8.0     # read-back verification window
 CONTROL_BACKOFF_S = 1800           # pause control after repeated failures
 CONTROL_STARTUP_GRACE_S = 300      # no writes right after boot
 _UNAVAIL = ("unavailable", "unknown", "none", "")
+
+# Export-mode guard targets: ``auto_export`` allows surplus PV to be
+# sold to the grid (verified live 2026-11-20 after the service-entrance
+# rewiring removed the voltage regulator that distorted the CT reading
+# and made zero-export regulate a false setpoint).
+EXPORT_WORK_MODE = "Export First"
 
 # Zero-export guard targets (verified live 2026-11-15): the inverter
 # must not export — there is no physical export path, so surplus PV
@@ -271,13 +280,16 @@ def _notify_conflict(
 async def async_apply_zero_export_guard(
     hass: HomeAssistant, entry, coordinator
 ) -> str | None:
-    """Keep the inverter's zero-export configuration enforced.
+    """Keep the inverter's export configuration aligned with the mode.
 
-    Checks ``work_mode`` (``Zero Export To CT``), ``export_surplus``
-    (off) and ``zero_export_power`` (20 W margin); writes whichever
-    deviates, one entity per call, under the same safety gates as the
-    grid-charge switch. Returns a short status for
-    ``plan_meta['zero_export']``; ``None`` when inactive. Never raises.
+    Executor modes other than ``auto_export`` enforce zero-export:
+    ``work_mode`` (``Zero Export To CT``), ``export_surplus`` (off) and
+    ``zero_export_power`` (20 W margin). ``auto_export`` flips the goal
+    to ``Export First`` + ``export_surplus`` on so surplus PV can be
+    sold to the grid. Writes whichever deviates, one entity per call,
+    under the same safety gates as the grid-charge switch. Returns a
+    short status for ``plan_meta['zero_export']``; ``None`` when
+    inactive. Never raises.
     """
     try:
         return await _zero_export_guard(hass, entry, coordinator)
@@ -302,26 +314,45 @@ async def _zero_export_guard(hass, entry, coordinator) -> str | None:
     if not prefix:
         return "ze_no_prefix"
 
-    targets = (
-        (
-            f"select.{prefix}_work_mode",
-            ZERO_EXPORT_WORK_MODE,
-            "select", "select_option",
-            {"option": ZERO_EXPORT_WORK_MODE},
-        ),
-        (
-            f"switch.{prefix}_export_surplus",
-            "off",
-            "switch", "turn_off",
-            {},
-        ),
-        (
-            f"number.{prefix}_zero_export_power",
-            ZERO_EXPORT_MARGIN_W,
-            "number", "set_value",
-            {"value": ZERO_EXPORT_MARGIN_W},
-        ),
-    )
+    # ``auto_export`` flips the guard's goal: enforce the export-permit
+    # configuration instead of the zero-export one. ``zero_export_power``
+    # is irrelevant in export mode and left untouched.
+    if coordinator.mode == MODE_AUTO_EXPORT:
+        targets = (
+            (
+                f"select.{prefix}_work_mode",
+                EXPORT_WORK_MODE,
+                "select", "select_option",
+                {"option": EXPORT_WORK_MODE},
+            ),
+            (
+                f"switch.{prefix}_export_surplus",
+                "on",
+                "switch", "turn_on",
+                {},
+            ),
+        )
+    else:
+        targets = (
+            (
+                f"select.{prefix}_work_mode",
+                ZERO_EXPORT_WORK_MODE,
+                "select", "select_option",
+                {"option": ZERO_EXPORT_WORK_MODE},
+            ),
+            (
+                f"switch.{prefix}_export_surplus",
+                "off",
+                "switch", "turn_off",
+                {},
+            ),
+            (
+                f"number.{prefix}_zero_export_power",
+                ZERO_EXPORT_MARGIN_W,
+                "number", "set_value",
+                {"value": ZERO_EXPORT_MARGIN_W},
+            ),
+        )
     saw_unavailable = False
     for entity_id, want, domain, service, extra in targets:
         state = hass.states.get(entity_id)

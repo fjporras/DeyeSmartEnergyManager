@@ -168,7 +168,11 @@ verificaron en vivo varios comportamientos que el modelo asumía:
 | 16-11 | Con `work_mode=Zero Export To CT` el inversor vertió ~2 kW pese a configuración correcta; `external_power` oscilaba ±3 kW cada ~5 s | Posible CT descompensado o `microinverter_export_cut_off` OFF — pendiente de experimento |
 | 16-11 | Precarga nocturna llenaba la batería al 100 % y el excedente FV no cabía (vertido/curtail) | Crédito FV en el optimizador (v0.6.0) |
 | 16-11 | `last_updated` envejecía en sensores a valor constante (0 W) → stale permanente | Stale usa `last_reported` (v0.5.1) |
+| 19-11 | Con `work_mode=Zero Export To CT` correcto, `external_power` exportó −3,4 kW durante 1 h con batería al 99 % (día FV récord 36,8 kWh) | El lazo zero-export no cubría la ruta GEN/microinversor |
+| 20-11 | Experimento `microinverter_export_cut_off` (automatización A/B): ON → `external_power` pasó de −2,8 kW a +2,2 kW (curtailing, no reenvío a batería) | El switch corta el vertido pero por recorte FV |
+| 20-11 | **Causa raíz identificada**: el regulador de tensión intercalado en la acometida distorsionaba la medida del CT → el lazo zero-export regulaba a un punto cero falso | Eliminado el regulador: acometida → entrada Grid del Deye directa; la medida del CT ahora es real |
 
 Versiones publicadas: v0.4.0 (física descarga autónoma), v0.5.0
 (conflicto PVPC), v0.5.1 (fix stale), v0.6.0 (crédito FV), v0.7.0
-(guardia zero-export), v0.8.0/v0.8.1 (guardia off_grid + fix tensión).
+(guardia de exportación), v0.8.0/v0.8.1 (guardia off_grid + fix tensión),
+v0.9.0 (headroom FV), v0.9.1 (modo `auto_export` para permitir vertido).

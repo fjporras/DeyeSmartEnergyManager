@@ -113,7 +113,8 @@ ssh usuario@<host> \
 - Cada versión se publica con `git tag vX.Y.Z` + push → HACS la ofrece
   como actualización. Historial: v0.4.0 física descarga autónoma,
   v0.5.x conflicto PVPC + fix stale, v0.6.0 crédito FV,
-  v0.7.0 guardia zero-export, v0.8.x guardia off_grid.
+  v0.7.0 guardia de exportación (zero-export), v0.8.x guardia off_grid,
+  v0.9.x headroom FV + modo `auto_export` (vertido permitido).
 - **Activación del control** (una sola vez): Opciones → `enable_control`
   = ON → seleccionar modo ejecutor (`auto`…) en
   `select.deye_smart_energy_manager_modo`. La automatización PVPC se
@@ -126,5 +127,7 @@ ssh usuario@<host> \
 - Perfil de carga por día-tipo (laborable/fin de semana).
 - Solcast para curva FV horaria + intervalos P10/P90.
 - Optimizer LP con HiGHS si el heurístico se queda corto.
-- Experimento pendiente: `microinverter_export_cut_off` y diagnóstico
-  de CTs (vertido ~2 kW observado con zero-export "correcto").
+- `microinverter_export_cut_off` queda como ajuste **manual** (opción A,
+  decidido 2026-11-20): la causa del vertido fantasma era el regulador
+  de tensión intercalado en la acometida, ya eliminado — la medida del CT
+  ahora es real. Ver VALIDATION.md §8.

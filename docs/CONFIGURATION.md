@@ -94,7 +94,7 @@ Las series usadas quedan visibles en los atributos de
 | Opción | Default | Efecto |
 |---|---|---|
 | `mode` | `shadow` | Modo inicial obligatorio |
-| `enable_control` | `false` | Habilita modos ejecutores; sin él, `select.dsem_mode` rechaza `auto`/`economic`/`solar_priority`/`backup`/`target_soc` |
+| `enable_control` | `false` | Habilita modos ejecutores; sin él, `select.dsem_mode` rechaza `auto`/`auto_export`/`economic`/`solar_priority`/`backup`/`target_soc` |
 | `grid_charge_switch_entity` | `switch.deye_…_battery_grid_charging` | Interruptor que escribe el ejecutor (acción `charge_grid` → on; resto → off) |
 | `pvpc_automation_entity` | `automation.pvpc_carga_bateria_deye_en_horas_baratas` | Automatización legada que comparte el interruptor; DSEM la pausa/restaura automáticamente |
 
@@ -107,22 +107,38 @@ como máximo **un cambio por entidad y ciclo** sobre tres superficies
 1. `switch.battery_grid_charging` — permiso de carga desde red
    (`charge_grid` → on; resto → off). El inversor decide potencia y
    tiempos. Estado en `plan_meta.control`.
-2. **Guardia zero-export** — `work_mode`/`export_surplus`/
-   `zero_export_power` (ver abajo). Estado en `plan_meta.zero_export`.
+2. **Guardia de exportación** — `work_mode`/`export_surplus`/
+   `zero_export_power` (ver abajo). Su objetivo depende del modo:
+   prohibir vertido (`auto` y resto) o permitirlo (`auto_export`).
+   Estado en `plan_meta.zero_export`.
 3. **Guardia `off_grid`** — ON solo en slots `discharge`, OFF el resto
    (ver abajo). Estado en `plan_meta.offgrid`.
 
-**Guardia zero-export** (`plan_meta.zero_export`): en el mismo ciclo
-verifica que el inversor no pueda verter a la red — la vivienda no
-tiene camino físico de exportación, así que el excedente FV debe ir a
-la batería o curtarse. Si alguna entidad difiere, la corrige (una por
-ciclo, mismo min-dwell):
+**Guardia de exportación** (`plan_meta.zero_export`): en el mismo ciclo
+verifica que la configuración de exportación del inversor coincide con
+el modo activo. Con `auto` (y cualquier otro modo ejecutor) el objetivo
+es **cero vertido**: la configuración de `work_mode` en
+`Zero Export To CT`, `export_surplus` off y `zero_export_power` = 20 W
+de margen — el excedente FV va a la batería o se curta en el inversor.
+Con **`auto_export`** el objetivo se invierte: `work_mode` =
+`Export First` y `export_surplus` = on, para que el excedente FV pueda
+venderse a la red (`zero_export_power` se ignora). Si alguna entidad
+difiere, la corrige (una por ciclo, mismo min-dwell):
 
-| Entidad (prefijo del switch) | Objetivo |
-|---|---|
-| `select.<prefix>_work_mode` | `Zero Export To CT` |
-| `switch.<prefix>_export_surplus` | `off` |
-| `number.<prefix>_zero_export_power` | `20` (W de margen) |
+| Entidad (prefijo del switch) | `auto` / resto | `auto_export` |
+|---|---|---|
+| `select.<prefix>_work_mode` | `Zero Export To CT` | `Export First` |
+| `switch.<prefix>_export_surplus` | `off` | `on` |
+| `number.<prefix>_zero_export_power` | `20` (W de margen) | *(sin tocar)* |
+
+Contexto (2026-11-20): la acometida pasó a conectarse directamente a la
+entrada Grid del Deye, eliminando el regulador de tensión que
+distorsionaba la medida del CT — la causa real del vertido fantasma
+residual. `auto_export` existe para instalaciones con camino físico de
+exportación; en instalaciones sin él, `auto` sigue siendo el modo
+correcto (el inversor curta el excedente en vez de verter). El switch
+`microinverter_export_cut_off` queda **fuera** de DSEM en ambos modos:
+se gestiona manualmente (opción A).
 
 Estados: `ze_ok`, `ze_written:<entity>`, `ze_unavailable`,
 `ze_rate_limited`, `ze_backoff`, `ze_write_failed`.

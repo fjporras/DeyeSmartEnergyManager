@@ -97,7 +97,8 @@
         "solar_priority": "Prioridad solar",
         "economic": "Económico",
         "backup": "Reserva",
-        "auto": "Auto (ejecuta)",
+        "auto": "Auto (ejecuta, sin vertido)",
+        "auto_export": "Auto + vertido a red",
         "target_soc": "Objetivo SOC (restricción)"
       }
     }
@@ -145,7 +146,8 @@
           "solar_priority": "Prioridad solar",
           "economic": "Económico",
           "backup": "Reserva",
-          "auto": "Auto",
+          "auto": "Auto (sin vertido)",
+          "auto_export": "Auto + vertido",
           "target_soc": "SOC objetivo"
         }
       }

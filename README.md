@@ -8,7 +8,7 @@ SUN-15K-SG05LP3-EU-SM2 y batería SEPLOS (~32 kWh nominales).
 
 ## Estado del proyecto
 
-- **Versión:** v0.9.0 — integración en producción con **control real
+- **Versión:** v0.9.1 — integración en producción con **control real
   verificado en vivo** (modo `auto` + `enable_control`).
 - **Capacidades:** planificador horario 24 h (heurístico determinista,
   48 tests), precios PVPC/InfluxDB, previsión FV con corrección de sesgo,
