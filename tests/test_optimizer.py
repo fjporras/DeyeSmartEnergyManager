@@ -63,6 +63,23 @@ def test_arbitrage_charges_cheap_and_discharges_expensive():
     assert plan.expected_savings_eur > 0
 
 
+def test_cheap_deficit_holds_battery_for_expensive_hours():
+    # Cheap hour now, expensive deficit ahead, no PV: the plan must
+    # grid-serve the cheap deficit (import) instead of draining the
+    # battery into it — the stored kWh is worth more tonight.
+    prices = _arbitrage_prices()  # cheap 02-05, expensive 19-22
+    plan = optimize(_inp(prices, [0.0] * 24, [2.0] * 24))
+    cheap = [s for s in plan.slots if 2 <= s.start.hour <= 5]
+    assert cheap and all(
+        s.action == model.ACTION_IMPORT or s.action == model.ACTION_CHARGE_GRID
+        for s in cheap
+    )
+    held = [s for s in cheap if s.reason == "hold_for_expensive"]
+    assert held and all(
+        s.battery_power_w == 0 and s.grid_power_w > 0 for s in held
+    )
+
+
 def test_soc_bounds_and_reserve_respected():
     prices = _arbitrage_prices()
     plan = optimize(_inp(prices, [0.0] * 24, [5.0] * 24))

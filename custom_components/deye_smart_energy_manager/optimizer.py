@@ -423,17 +423,36 @@ def optimize(inp: PlannerInput) -> EnergyPlan:
                     reason = "cheap_hour_precharge"
                 grid = deficit + chg
             else:
-                # No charge slot: the battery discharges autonomously and
-                # the grid covers only what the battery cannot.
-                soc_kwh = soc_after_auto
-                grid = deficit - dis_auto
-                if dis_auto > 0.01:
-                    batt_w = dis_auto * 1000.0
-                    action = ACTION_DISCHARGE
-                    reason = "auto_discharge"
-                else:
+                # Hold rule: in a cheap deficit hour the grid serves the
+                # load so the stored energy survives for the expensive
+                # uncovered deficit still ahead (``pv_fut``). Draining
+                # the battery into e.g. an EV session at 0.07 €/kWh only
+                # to buy the same kWh back at 0.30 €/kWh tonight is a
+                # net loss. Verified live 2026-11-22: with ``off_grid``
+                # ON the battery feeds EVERY load, EV included — the
+                # only way to grid-feed the EV is holding discharge.
+                hold = (
+                    price is not None
+                    and price <= cheap_thr
+                    and pv_fut[i + 1] > 0.0
+                )
+                if hold:
+                    grid = deficit
                     action = ACTION_IMPORT
-                    reason = "mid_price_import"
+                    reason = "hold_for_expensive"
+                else:
+                    # No charge slot: the battery discharges
+                    # autonomously and the grid covers only what the
+                    # battery cannot.
+                    soc_kwh = soc_after_auto
+                    grid = deficit - dis_auto
+                    if dis_auto > 0.01:
+                        batt_w = dis_auto * 1000.0
+                        action = ACTION_DISCHARGE
+                        reason = "auto_discharge"
+                    else:
+                        action = ACTION_IMPORT
+                        reason = "mid_price_import"
 
         if target_idx is not None and i == target_idx:
             soc_at_target = soc_kwh

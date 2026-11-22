@@ -190,6 +190,7 @@ views:
             'soc_target_forced_charge': 'objetivo SOC: carga forzada',
             'soc_reserve_charge': 'reserva: carga forzada',
             'auto_discharge': 'descarga autónoma',
+            'hold_for_expensive': 'reserva p/ horas caras',
             'expensive_deficit': 'déficit en hora cara',
             'mid_price_import': 'importación precio medio',
             'reserve_hold': 'retención por reserva',
