@@ -23,6 +23,7 @@ CONF_ENERGY_IMPORT_ENTITY = "energy_import_entity"
 CONF_ENERGY_EXPORT_ENTITY = "energy_export_entity"
 CONF_EV_STATE_ENTITY = "ev_state_entity"
 CONF_EV_CURRENT_ENTITY = "ev_charge_current_entity"
+CONF_EV_POWER_ENTITY = "ev_power_entity"
 
 # ---------------------------------------------------------------------------
 # Options keys (physical/optimizer parameters)
@@ -136,10 +137,13 @@ DEFAULT_GRID_CHARGE_SWITCH_ENTITY = (
 DEFAULT_PVPC_AUTOMATION_ENTITY = (
     "automation.pvpc_carga_bateria_deye_en_horas_baratas"
 )
-# EV charger (dé EV Charger via tuya_local — no power sensor; power is
-# estimated as charge_current_A x EV_VOLTAGE when state == charging)
+# EV charger (dé EV Charger via tuya_local — power is estimated as
+# charge_current_A x EV_VOLTAGE when state == charging, unless a real
+# power sensor is configured in ev_power_entity — preferred, since the
+# charger is three-phase and the amps x voltage estimate under-reads)
 DEFAULT_EV_STATE_ENTITY = "sensor.de_ev_charger_estado"
 DEFAULT_EV_CURRENT_ENTITY = "number.de_ev_charger_charge_current"
+DEFAULT_EV_POWER_ENTITY = "sensor.garaje_de_ev_charger_cargador_ve_potencia"
 DEFAULT_EV_VOLTAGE = 230.0
 
 # ---------------------------------------------------------------------------

@@ -21,6 +21,7 @@ from .const import (
     CONF_ENERGY_EXPORT_ENTITY,
     CONF_ENERGY_IMPORT_ENTITY,
     CONF_EV_CURRENT_ENTITY,
+    CONF_EV_POWER_ENTITY,
     CONF_EV_STATE_ENTITY,
     CONF_EXPORT_PRICE_EUR_KWH,
     CONF_GRID_CHARGE_SWITCH_ENTITY,
@@ -147,6 +148,10 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
 
     # -- helpers ------------------------------------------------------------
 
+    def _conf(self, key: str) -> str | None:
+        """Config value: options take precedence over initial data."""
+        return self._entry.options.get(key) or self._entry.data.get(key)
+
     def _power_w(self, entity_id: str | None, missing: list[str]) -> float | None:
         """Read a power sensor and normalize to W."""
         value = self._float(entity_id, missing)
@@ -209,21 +214,32 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
         return state.state
 
     def _ev_power_w(
-        self, state_entity: str | None, current_entity: str | None
+        self,
+        state_entity: str | None,
+        current_entity: str | None,
+        power_entity: str | None = None,
     ) -> float | None:
         """Estimated EV charge power in W.
 
-        The dé EV Charger (tuya_local) exposes no power sensor; power is
-        estimated as charge_current_A x 230 V, only while the charger
-        reports an active session. Returns 0 when idle — the estimate is
-        clearly labelled in plan_meta (not a measurement).
+        With a real power sensor configured (``ev_power_entity``) the
+        measured value is used — preferred, since the charger is
+        three-phase. Otherwise power is estimated as
+        charge_current_A x 230 V, only while the charger reports an
+        active session. Returns 0 when idle — the estimate is clearly
+        labelled in plan_meta (not a measurement).
         """
         state = self._ev_state(state_entity)
-        if state is None:
+        if state is None and power_entity is None:
             return None
-        if state.lower() not in ("charging", "charge", "cargando"):
+        if state is not None and state.lower() not in (
+            "charging", "charge", "cargando"
+        ):
             return 0.0
         missing: list[str] = []
+        if power_entity:
+            watts = self._power_w(power_entity, missing)
+            if watts is not None:
+                return watts
         amps = self._float(current_entity, missing)
         if amps is None or amps <= 0:
             return None
@@ -596,10 +612,11 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
             energy_export_today_kwh=self._float(
                 data.get(CONF_ENERGY_EXPORT_ENTITY), missing
             ),
-            ev_state=self._ev_state(data.get(CONF_EV_STATE_ENTITY)),
+            ev_state=self._ev_state(self._conf(CONF_EV_STATE_ENTITY)),
             ev_power_w=self._ev_power_w(
-                data.get(CONF_EV_STATE_ENTITY),
-                data.get(CONF_EV_CURRENT_ENTITY),
+                self._conf(CONF_EV_STATE_ENTITY),
+                self._conf(CONF_EV_CURRENT_ENTITY),
+                self._conf(CONF_EV_POWER_ENTITY),
             ),
             missing_entities=tuple(missing),
             stale_entities=tuple(stale),

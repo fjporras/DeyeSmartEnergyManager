@@ -32,7 +32,8 @@
           "energy_import_entity": "Grid import energy counter",
           "energy_export_entity": "Grid export energy counter",
           "ev_state_entity": "EV charger — state",
-          "ev_charge_current_entity": "EV charger — charge current"
+          "ev_charge_current_entity": "EV charger — charge current",
+          "ev_power_entity": "EV charger — charge power"
         }
       }
     },
@@ -79,7 +80,10 @@
           "load_profile_quantile": "Load profile quantile (0.5-0.95)",
           "pv_headroom_enabled": "Reserve battery headroom for same-day PV surplus (limits grid charging)",
           "grid_charge_switch_entity": "Grid-charging switch written by the executor (charge_grid action only)",
-          "pvpc_automation_entity": "Legacy automation sharing the grid-charging switch — suspended automatically while an executor mode is active"
+          "pvpc_automation_entity": "Legacy automation sharing the grid-charging switch — suspended automatically while an executor mode is active",
+          "ev_state_entity": "EV charger — state",
+          "ev_charge_current_entity": "EV charger — charge current",
+          "ev_power_entity": "EV charger — charge power"
         }
       }
     },

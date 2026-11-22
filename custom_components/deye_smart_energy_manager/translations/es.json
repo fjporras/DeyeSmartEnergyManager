@@ -32,7 +32,8 @@
           "energy_import_entity": "Contador de energía importada",
           "energy_export_entity": "Contador de energía exportada",
           "ev_state_entity": "Cargador VE — estado",
-          "ev_charge_current_entity": "Cargador VE — corriente de carga"
+          "ev_charge_current_entity": "Cargador VE — corriente de carga",
+          "ev_power_entity": "Cargador VE — potencia de carga"
         }
       }
     },
@@ -79,7 +80,10 @@
           "load_profile_quantile": "Cuantil del perfil de carga (0,5-0,95)",
           "pv_headroom_enabled": "Reservar margen de batería para el excedente FV del día (limita la carga de red)",
           "grid_charge_switch_entity": "Interruptor de carga de red que escribe el ejecutor (solo acción charge_grid)",
-          "pvpc_automation_entity": "Automatización legada que comparte el interruptor de carga — se pausa automáticamente en modos ejecutores"
+          "pvpc_automation_entity": "Automatización legada que comparte el interruptor de carga — se pausa automáticamente en modos ejecutores",
+          "ev_state_entity": "Cargador VE — estado",
+          "ev_charge_current_entity": "Cargador VE — corriente de carga",
+          "ev_power_entity": "Cargador VE — potencia de carga"
         }
       }
     },

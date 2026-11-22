@@ -21,6 +21,7 @@ from .const import (
     CONF_ENERGY_EXPORT_ENTITY,
     CONF_ENERGY_IMPORT_ENTITY,
     CONF_EV_CURRENT_ENTITY,
+    CONF_EV_POWER_ENTITY,
     CONF_EV_STATE_ENTITY,
     CONF_EXPORT_PRICE_EUR_KWH,
     CONF_GRID_POWER_ENTITY,
@@ -66,6 +67,7 @@ from .const import (
     DEFAULT_ENERGY_EXPORT_ENTITY,
     DEFAULT_ENERGY_IMPORT_ENTITY,
     DEFAULT_EV_CURRENT_ENTITY,
+    DEFAULT_EV_POWER_ENTITY,
     DEFAULT_EV_STATE_ENTITY,
     DEFAULT_EXPORT_PRICE_EUR_KWH,
     DEFAULT_GRID_CHARGE_SWITCH_ENTITY,
@@ -212,6 +214,7 @@ class DsemConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_ENERGY_EXPORT_ENTITY: _ENERGY_UNITS,
                 CONF_EV_STATE_ENTITY: set(),
                 CONF_EV_CURRENT_ENTITY: set(),
+                CONF_EV_POWER_ENTITY: set(),
             }
             data: dict[str, Any] = dict(self._required)
             for key, units in checks.items():
@@ -259,6 +262,9 @@ class DsemConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         vol.Optional(CONF_EV_CURRENT_ENTITY): selector.EntitySelector(
                             selector.EntitySelectorConfig(domain="number")
                         ),
+                        vol.Optional(CONF_EV_POWER_ENTITY): selector.EntitySelector(
+                            selector.EntitySelectorConfig(domain="sensor")
+                        ),
                     }
                 ),
                 {
@@ -270,6 +276,7 @@ class DsemConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_ENERGY_EXPORT_ENTITY: DEFAULT_ENERGY_EXPORT_ENTITY,
                     CONF_EV_STATE_ENTITY: DEFAULT_EV_STATE_ENTITY,
                     CONF_EV_CURRENT_ENTITY: DEFAULT_EV_CURRENT_ENTITY,
+                    CONF_EV_POWER_ENTITY: DEFAULT_EV_POWER_ENTITY,
                 },
             ),
             errors=errors,
@@ -328,6 +335,17 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                             CONF_PVPC_AUTOMATION_ENTITY
                         ): selector.EntitySelector(
                             selector.EntitySelectorConfig(domain="automation")
+                        ),
+                        vol.Optional(CONF_EV_STATE_ENTITY): selector.EntitySelector(
+                            selector.EntitySelectorConfig(domain="sensor")
+                        ),
+                        vol.Optional(
+                            CONF_EV_CURRENT_ENTITY
+                        ): selector.EntitySelector(
+                            selector.EntitySelectorConfig(domain="number")
+                        ),
+                        vol.Optional(CONF_EV_POWER_ENTITY): selector.EntitySelector(
+                            selector.EntitySelectorConfig(domain="sensor")
                         ),
                         vol.Required(CONF_BATTERY_USABLE_KWH): selector.NumberSelector(
                             selector.NumberSelectorConfig(
@@ -513,6 +531,15 @@ class DsemOptionsFlow(config_entries.OptionsFlow):
                         CONF_PVPC_AUTOMATION_ENTITY,
                         DEFAULT_PVPC_AUTOMATION_ENTITY,
                     ),
+                    CONF_EV_STATE_ENTITY: options.get(CONF_EV_STATE_ENTITY)
+                    or self.config_entry.data.get(CONF_EV_STATE_ENTITY)
+                    or DEFAULT_EV_STATE_ENTITY,
+                    CONF_EV_CURRENT_ENTITY: options.get(CONF_EV_CURRENT_ENTITY)
+                    or self.config_entry.data.get(CONF_EV_CURRENT_ENTITY)
+                    or DEFAULT_EV_CURRENT_ENTITY,
+                    CONF_EV_POWER_ENTITY: options.get(CONF_EV_POWER_ENTITY)
+                    or self.config_entry.data.get(CONF_EV_POWER_ENTITY)
+                    or DEFAULT_EV_POWER_ENTITY,
                     CONF_BATTERY_USABLE_KWH: options.get(
                         CONF_BATTERY_USABLE_KWH, DEFAULT_BATTERY_USABLE_KWH
                     ),
