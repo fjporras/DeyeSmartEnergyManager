@@ -364,6 +364,15 @@ auditoría estática:
   se observó vertido ~2 kW con `external_power` oscilando ±3 kW cada
   ~5 s — el lazo regulador caza el cero sin sostenerlo. Causa no
   resuelta: sospechosos `microinverter_export_cut_off` (OFF) y CTs.
+- **`energy_pattern` gobierna la carga FV desde el puerto GEN**
+  (2026-11-22): con `Load First` el inversor vierte TODO el excedente
+  del microinversor a red y la batería queda `idle` aunque el plan pida
+  `charge_pv` (observado: FV 6,0 kW, carga 2,6 kW, export −3,3 kW,
+  batería +40 W con SOC 56 %). Con `Battery First` el excedente GEN se
+  rectifica a la batería (observado a los 2 min: batería −4,7 kW,
+  `external_power` ~0 W). `work_mode=Export First` no impedía la carga:
+  el patrón de energía era el único bloqueo. En `Load First` la batería
+  solo cargaba vía TOU/red, nunca desde FV acoplada en AC.
 - **Reboot/config-sync masivo**: el 16-11 ~14:28 todas las entidades
   Deye cambiaron a la vez (`last_changed` idéntico) — evento de
   resincronización del dispositivo; `energy_pattern` quedó en

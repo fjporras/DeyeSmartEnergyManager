@@ -6,9 +6,10 @@ Writable surface (all gated by mode + ``enable_control``):
   * Zero-export guard — keeps ``work_mode`` at ``Zero Export To CT``,
     ``export_surplus`` off and ``zero_export_power`` at 20 W, so the
     export configuration — ``auto_export`` enforces ``Export First`` +
-    ``export_surplus`` on (surplus PV may be sold to the grid);
-    every other executor mode enforces zero-export (``Zero Export To
-    CT`` + ``export_surplus`` off + 20 W margin).
+    ``export_surplus`` on + ``energy_pattern`` ``Battery First``
+    (surplus PV may be sold to the grid, but the battery takes it
+    first); every other executor mode enforces zero-export
+    (``Zero Export To CT`` + ``export_surplus`` off + 20 W margin).
   * ``off_grid`` guard — ON only while the plan expects the battery to
     serve the load (``discharge`` slots), OFF otherwise because it
     blocks grid charging. Verified live: this inverter only discharges
@@ -63,6 +64,14 @@ _UNAVAIL = ("unavailable", "unknown", "none", "")
 # rewiring removed the voltage regulator that distorted the CT reading
 # and made zero-export regulate a false setpoint).
 EXPORT_WORK_MODE = "Export First"
+
+# Energy-pattern guard target (verified live 2026-11-22): with
+# ``energy_pattern`` at ``Load First`` this inverter skips the battery
+# for GEN-port PV surplus entirely — PV serves load then exports while
+# the battery stays idle even in ``charge_pv`` slots. ``Battery First``
+# routes the surplus into the battery first (observed: battery −4.7 kW
+# charging, grid exchange ~0 W), so it is enforced in ``auto_export``.
+EXPORT_ENERGY_PATTERN = "Battery First"
 
 # Zero-export guard targets (verified live 2026-11-15): the inverter
 # must not export — there is no physical export path, so surplus PV
@@ -330,6 +339,12 @@ async def _zero_export_guard(hass, entry, coordinator) -> str | None:
                 "on",
                 "switch", "turn_on",
                 {},
+            ),
+            (
+                f"select.{prefix}_energy_pattern",
+                EXPORT_ENERGY_PATTERN,
+                "select", "select_option",
+                {"option": EXPORT_ENERGY_PATTERN},
             ),
         )
     else:
