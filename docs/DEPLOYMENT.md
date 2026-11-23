@@ -114,7 +114,8 @@ ssh usuario@<host> \
   como actualización. Historial: v0.4.0 física descarga autónoma,
   v0.5.x conflicto PVPC + fix stale, v0.6.0 crédito FV,
   v0.7.0 guardia de exportación (zero-export), v0.8.x guardia off_grid,
-  v0.9.x headroom FV + modo `auto_export` (vertido permitido).
+  v0.9.x headroom FV + modo `auto_export` (vertido permitido) +
+  histéresis de persistencia en `off_grid` (v0.9.5).
 - **Activación del control** (una sola vez): Opciones → `enable_control`
   = ON → seleccionar modo ejecutor (`auto`…) en
   `select.deye_smart_energy_manager_modo`. La automatización PVPC se

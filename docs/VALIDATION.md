@@ -175,4 +175,8 @@ verificaron en vivo varios comportamientos que el modelo asumía:
 Versiones publicadas: v0.4.0 (física descarga autónoma), v0.5.0
 (conflicto PVPC), v0.5.1 (fix stale), v0.6.0 (crédito FV), v0.7.0
 (guardia de exportación), v0.8.0/v0.8.1 (guardia off_grid + fix tensión),
-v0.9.0 (headroom FV), v0.9.1 (modo `auto_export` para permitir vertido).
+v0.9.0 (headroom FV), v0.9.1 (modo `auto_export` para permitir vertido),
+v0.9.5 (histéresis de persistencia en la guardia `off_grid` — rompe el
+ciclo límite ON/OFF de ~10 min observado 2026-11-22/23: el SOC
+oscilando 41↔42 % hacía parpadear `discharge`↔`charge_grid` y la
+batería revendía a la red lo que acababa de descargar).

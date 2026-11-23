@@ -154,8 +154,23 @@ cortes es dueña del switch en isla (ojo: `binary_sensor.*_grid` marca
 `off` siempre que el intercambio con red sea cero, no es señal de
 presencia de red) — ni por debajo de
 `OFFGRID_MIN_SOC_PCT` (12 %). Al salir de los modos ejecutores, un ON
-puesto por DSEM se restaura a OFF. Estados: `og_ok:on|off`,
-`og_written:on|off`, `og_rate_limited`, `og_unavailable`,
+puesto por DSEM se restaura a OFF.
+
+**Histéresis de persistencia (v0.9.5):** el slot 0 del plan puede
+parpadear `discharge` ↔ `charge_grid`/`import` con el SOC en el borde
+de la reserva, lo que antes provocaba un ciclo límite ON/OFF de ~10
+min — la batería descargaba a la casa y volvía a comprar la misma
+energía a la red (observado en vivo 2026-11-22/23: ~1,2–1,5 kWh/h de
+churn, 70+ conmutaciones del relé en una noche). Ahora la escritura
+exige la misma demanda durante `OFFGRID_WRITE_PERSIST_EVALS` (8)
+evaluaciones consecutivas (~8 min a 60 s/ciclo, estado
+`og_pending:on|off:N`). La excepción inmediata: con el switch ON y el
+SOC en el suelo físico, el OFF de protección no espera — se escribe
+sin persistencia ni rate-limit.
+
+Estados: `og_ok:on|off`,
+`og_written:on|off`, `og_pending:on|off:N`, `og_rate_limited`,
+`og_unavailable`,
 `og_grid_down`, `og_low_soc`, `og_backoff`, `og_unsafe_data`, …
 
 Interlocks: plan disponible + snapshot completo sin entidades

@@ -13,7 +13,9 @@ Writable surface (all gated by mode + ``enable_control``):
   * ``off_grid`` guard — ON only while the plan expects the battery to
     serve the load (``discharge`` slots), OFF otherwise because it
     blocks grid charging. Verified live: this inverter only discharges
-    to the house load when ``off_grid`` is ON.
+    to the house load when ``off_grid`` is ON. Writes additionally
+    require the same demand for OFFGRID_WRITE_PERSIST_EVALS
+    consecutive evaluations (anti-flap hysteresis).
 
 Safety gates (all must pass before any service call):
   * mode in CONTROL_MODES and ``enable_control`` option on
@@ -86,6 +88,18 @@ ZERO_EXPORT_MARGIN_W = 20.0
 # the plan calls for ``charge_grid``. Mapping: ON only for discharge
 # slots, OFF for everything else.
 OFFGRID_MIN_SOC_PCT = 12.0  # never force discharge below physical floor
+
+# Persistence hysteresis (added after the 2026-11-22/23 limit cycle):
+# recomputing the plan every 60 s lets the slot-0 action flap
+# ``discharge`` <-> ``charge_grid``/``import`` while the SOC sits at
+# the reserve boundary — the guard then wrote ON/OFF every ~600 s and
+# the battery discharged ~2 kW to the house only to buy the same
+# energy back from the grid minutes later (~1.2-1.5 kWh/h of pure
+# churn, 70+ relay commutations in one night). A write now requires
+# the same demand for ``OFFGRID_WRITE_PERSIST_EVALS`` consecutive
+# evaluations (~N min at the 60 s cadence); a pending OFF at/below
+# the SOC floor bypasses it together with the write rate limit.
+OFFGRID_WRITE_PERSIST_EVALS = 8
 
 
 async def async_apply_control(
@@ -408,7 +422,11 @@ async def async_apply_offgrid_guard(
 
     ON only while the current slot expects the battery to serve the
     load (``discharge`` action); OFF otherwise because it blocks grid
-    charging. Same safety gates as the other writers, plus: never
+    charging. A state change is written only after the same demand
+    has persisted for ``OFFGRID_WRITE_PERSIST_EVALS`` consecutive
+    evaluations, so plan flap around the SOC reserve boundary cannot
+    cycle the grid relay. Same safety gates as the other writers,
+    plus: never
     writes ON while grid voltage is below 150 V (the outage automation
     owns ``off_grid`` then — note ``binary_sensor.*_grid`` reads off
     whenever exchange is zero, so it is not a presence signal), and
@@ -433,6 +451,8 @@ async def _offgrid_guard(hass, entry, coordinator, snapshot) -> str | None:
     store = hass.data.setdefault(DOMAIN, {})
 
     if not active:
+        coordinator._offgrid_pending_want = None
+        coordinator._offgrid_pending_count = 0
         # Restore a DSEM-owned ON state when control is no longer active.
         if entity_id and store.pop(marker, False):
             state = hass.states.get(entity_id)
@@ -468,6 +488,9 @@ async def _offgrid_guard(hass, entry, coordinator, snapshot) -> str | None:
     if state is None or state.state.lower() in _UNAVAIL:
         return "og_unavailable"
 
+    soc = snapshot.battery_soc_pct
+    low_soc = soc is not None and soc <= OFFGRID_MIN_SOC_PCT
+
     if want_on:
         # Do not fight the outage automation: if the grid voltage is
         # genuinely absent the island logic owns this switch. NOTE the
@@ -481,12 +504,13 @@ async def _offgrid_guard(hass, entry, coordinator, snapshot) -> str | None:
                     return "og_grid_down"
             except (TypeError, ValueError):
                 pass
-        soc = snapshot.battery_soc_pct
-        if soc is not None and soc <= OFFGRID_MIN_SOC_PCT:
+        if low_soc:
             return "og_low_soc"
 
     want = "on" if want_on else "off"
     if state.state == want:
+        coordinator._offgrid_pending_want = None
+        coordinator._offgrid_pending_count = 0
         if want_on:
             store[marker] = True
         else:
@@ -494,15 +518,38 @@ async def _offgrid_guard(hass, entry, coordinator, snapshot) -> str | None:
         coordinator._offgrid_failures = 0
         return f"og_ok:{want}"
 
-    last_write = getattr(coordinator, "_offgrid_last_write", None)
-    if last_write and (now - last_write).total_seconds() \
-            < CONTROL_MIN_INTERVAL_S:
-        return "og_rate_limited"
+    # Persistence hysteresis: the slot-0 action can flap around the
+    # SOC reserve boundary (discharge <-> charge_grid/import), which
+    # used to drive a ~10-minute ON/OFF limit cycle — the battery
+    # discharged to the house and then bought the same energy back
+    # from the grid. A write now requires the same demand for
+    # OFFGRID_WRITE_PERSIST_EVALS consecutive evaluations. Bypassed
+    # (together with the write rate limit) when the switch is ON and
+    # the SOC already sits at the physical floor — that OFF is a
+    # battery-protection write and cannot wait.
+    if state.state == "on" and not want_on and low_soc:
+        coordinator._offgrid_pending_want = None
+        coordinator._offgrid_pending_count = 0
+    else:
+        pending = getattr(coordinator, "_offgrid_pending_want", None)
+        count = getattr(coordinator, "_offgrid_pending_count", 0)
+        count = count + 1 if pending == want else 1
+        coordinator._offgrid_pending_want = want
+        coordinator._offgrid_pending_count = count
+        if count < OFFGRID_WRITE_PERSIST_EVALS:
+            return f"og_pending:{want}:{count}"
+
+        last_write = getattr(coordinator, "_offgrid_last_write", None)
+        if last_write and (now - last_write).total_seconds() \
+                < CONTROL_MIN_INTERVAL_S:
+            return "og_rate_limited"
 
     ok = await _write_and_verify(hass, entity_id, want)
     coordinator._offgrid_last_write = now
     if ok:
         coordinator._offgrid_failures = 0
+        coordinator._offgrid_pending_want = None
+        coordinator._offgrid_pending_count = 0
         if want_on:
             store[marker] = True
         else:
