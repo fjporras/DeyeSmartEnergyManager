@@ -126,6 +126,22 @@ aunque el switch de carga esté activado. Se recomienda poner los
 programas que coincidan con ventanas de carga a fuente `Both`/`Grid` y
 SOC alto (100 %).
 
+### Detección del cargador VE
+
+DSEM lee el cargador del coche (por defecto el dé EV Charger vía
+`tuya_local`) a través de tres entidades configurables:
+`sensor.de_ev_charger_estado`, `number.de_ev_charger_charge_current` y
+`sensor.garaje_de_ev_charger_cargador_ve_potencia` (si falta el sensor
+de potencia, la estima como `A × 230 V`).
+
+Cuando el VE carga, esa potencia se suma a la previsión de consumo del
+plan — los slots dejan de subestimar la demanda de la vivienda. Y hay
+un efecto físico importante: como el cargador cuelga del puerto **Load**
+del Deye, con `off_grid` ON la batería alimenta **todo**, VE incluido
+(~3–6 kW extra de descarga). El optimizador lo sabe: en horas baratas
+mantiene `off_grid` OFF (`hold_for_expensive`) para que el VE lo pague
+la red, y reserva la batería para las horas caras.
+
 ---
 
 ## 4. Qué escribe realmente el ejecutor
@@ -185,6 +201,17 @@ SOC shutdown/low, tensiones) ni el switch `microinverter_export_cut_off`
   `offgrid`, `tou_*`, `ev_*`, `price_source`…).
 - `sensor.deye_smart_energy_manager_estrategia_actual` — estrategia en
   lenguaje llano.
+- Sensores espejo (`potencia_fv`, `potencia_de_red`,
+  `potencia_de_bateria`, `soc_de_bateria`) — réplica en vivo de lo que
+  DSEM está leyendo del inversor; útiles para comprobar que la entrada
+  de datos es sana.
+- En el meta del plan, `offgrid` muestra el estado de la guardia:
+  `og_ok:on|off` (estado = demanda), `og_pending:on|off:N` (demanda
+  pendiente, N evaluaciones de 8), `og_written` / `og_rate_limited` /
+  `og_low_soc`…
+- Servicio `deye_smart_energy_manager.reoptimize` — fuerza un
+  recálculo inmediato del plan (útil tras enchufar el VE, cambiar el
+  límite de carga o corregir una previsión).
 - Logbook: cada orden ejecutada con su motivo.
 - `config/deye_smart_energy_manager/plan_log.jsonl` — historial de
   planes en JSON.
