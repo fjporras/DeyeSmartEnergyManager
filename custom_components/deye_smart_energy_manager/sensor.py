@@ -21,6 +21,22 @@ from .const import DOMAIN, MANUFACTURER, NAME, VERSION
 from .coordinator import DsemCoordinator
 from .model import EnergySnapshot
 
+# Slot reason codes -> Spanish label for the plan table (explainability).
+# Internal codes stay English in plan_log/debug; only the exposed "why"
+# attribute is translated.
+_REASON_ES = {
+    "balanced": "equilibrio FV/consumo",
+    "pv_surplus": "carga con excedente solar",
+    "pv_surplus_battery_full": "excedente solar (batería llena)",
+    "soc_target_precharge": "precarga para objetivo SOC",
+    "soc_target_forced_charge": "carga forzada para objetivo SOC",
+    "soc_reserve_charge": "carga para reserva SOC",
+    "cheap_hour_precharge": "precarga en hora barata",
+    "hold_for_expensive": "guardar batería para horas caras",
+    "auto_discharge": "descarga automática",
+    "mid_price_import": "importar (precio medio)",
+}
+
 
 @dataclass(frozen=True, kw_only=True)
 class DsemSensorDescription(SensorEntityDescription):
@@ -72,7 +88,7 @@ def _plan_attrs(
                 "grid_w": slot.grid_power_w,
                 "soc_end": slot.soc_end_pct,
                 "eur_kwh": slot.import_price_eur_kwh,
-                "why": slot.reason,
+                "why": _REASON_ES.get(slot.reason, slot.reason),
             }
             for slot in plan.slots[:48]
         ],
