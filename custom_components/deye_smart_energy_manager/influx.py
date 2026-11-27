@@ -169,7 +169,8 @@ def _hourly_flux(
         f' |> range(start: {start.isoformat()}, stop: {stop.isoformat()})'
         f' |> filter(fn: (r) => r._measurement == "{_esc(measurement)}"'
         f' and r._field == "{_esc(field)}"{tag_filter})'
-        " |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)"
+        ' |> aggregateWindow(every: 1h, fn: mean, createEmpty: false,'
+        ' timeSrc: "_start")'
         ' |> keep(columns: ["_time", "_value"])'
     )
 
