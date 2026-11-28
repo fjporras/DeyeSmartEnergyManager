@@ -4,7 +4,7 @@ from __future__ import annotations
 DOMAIN = "deye_smart_energy_manager"
 NAME = "Deye Smart Energy Manager"
 MANUFACTURER = "DSEM"
-VERSION = "0.9.1"
+VERSION = "0.9.7"
 
 # ---------------------------------------------------------------------------
 # Config entry data keys (entity_id mappings chosen in the config flow)

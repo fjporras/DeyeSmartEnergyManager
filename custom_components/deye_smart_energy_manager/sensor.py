@@ -95,6 +95,23 @@ def _plan_attrs(
     }
 
 
+def _export_price_attrs(
+    snapshot: EnergySnapshot, coordinator: DsemCoordinator
+) -> dict:
+    """Export price source + resolved hourly values for the plan."""
+    plan = coordinator.plan
+    attrs = {
+        "source": "influxdb" if coordinator.export_prices else "fija",
+        "fixed_fallback_eur_kwh": coordinator.export_price_fallback,
+    }
+    if plan is not None:
+        attrs["hourly"] = {
+            slot.start.isoformat(): coordinator.export_price_at(i)
+            for i, slot in enumerate(plan.slots[:24])
+        }
+    return attrs
+
+
 SENSORS: tuple[DsemSensorDescription, ...] = (
     DsemSensorDescription(
         key="optimization_status",
@@ -151,6 +168,16 @@ SENSORS: tuple[DsemSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
         value_fn=lambda s, c: s.battery_soc_pct,
+    ),
+    DsemSensorDescription(
+        key="export_price",
+        translation_key="export_price",
+        icon="mdi:transmission-tower-export",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="EUR/kWh",
+        value_fn=lambda s, c: round(c.export_price_at(0), 5),
+        attributes_fn=_export_price_attrs,
     ),
 )
 

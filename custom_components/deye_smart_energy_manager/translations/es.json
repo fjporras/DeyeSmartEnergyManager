@@ -138,6 +138,9 @@
       },
       "battery_soc": {
         "name": "SOC de batería"
+      },
+      "export_price": {
+        "name": "Precio de excedentes"
       }
     },
     "select": {

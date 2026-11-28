@@ -125,6 +125,7 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
         self._entry = entry
         self.plan: EnergyPlan | None = None
         self.plan_meta: dict[str, str] = {}
+        self.export_prices: tuple[float | None, ...] | None = None
         self._last_plan_log: str | None = None
         # Control executor state (control.py)
         self._control_ready_at = dt_util.now() + timedelta(
@@ -145,6 +146,29 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
     def control_enabled(self) -> bool:
         """True only when the user explicitly enabled real control."""
         return bool(self._entry.options.get(CONF_ENABLE_CONTROL, False))
+
+    @property
+    def export_price_fallback(self) -> float:
+        """Configured flat export (excedentes) price."""
+        return float(
+            self._entry.options.get(
+                CONF_EXPORT_PRICE_EUR_KWH, DEFAULT_EXPORT_PRICE_EUR_KWH
+            )
+        )
+
+    def export_price_at(self, slot_idx: int) -> float:
+        """Export (excedentes) price for plan slot idx.
+
+        Hourly InfluxDB series wins when present; otherwise the flat
+        configured fallback applies — same precedence the optimizer uses.
+        """
+        if (
+            self.export_prices
+            and slot_idx < len(self.export_prices)
+            and self.export_prices[slot_idx] is not None
+        ):
+            return self.export_prices[slot_idx]
+        return self.export_price_fallback
 
     # -- helpers ------------------------------------------------------------
 
@@ -347,6 +371,7 @@ class DsemCoordinator(DataUpdateCoordinator[EnergySnapshot]):
                         self.plan_meta["price_source"] = "influxdb"
                     if any(v is not None for v in exp):
                         export_prices = exp
+            self.export_prices = export_prices
             self.plan_meta.update(
                 self._tou_diagnostics(price_series.first_hour, horizon)
             )

@@ -168,6 +168,9 @@
       },
       "battery_soc": {
         "name": "Battery SOC"
+      },
+      "export_price": {
+        "name": "Export price"
       }
     },
     "select": {
