@@ -142,6 +142,12 @@ del Deye, con `off_grid` ON la batería alimenta **todo**, VE incluido
 mantiene `off_grid` OFF (`hold_for_expensive`) para que el VE lo pague
 la red, y reserva la batería para las horas caras.
 
+Si la carga VE drena la batería hasta el suelo de reserva
+(`reserve_soc_pct`) estando en isla, la guardia `off_grid` pasa a OFF
+y **se mantiene OFF hasta que termina la sesión** — sin ese latch, el
+plan alternaba isla/red cada ~10 min re-cargando desde red lo que la
+batería acababa de gastar en el coche (incidente 28-11).
+
 ---
 
 ## 4. Qué escribe realmente el ejecutor
@@ -172,6 +178,10 @@ SOC shutdown/low, tensiones) ni el switch `microinverter_export_cut_off`
   plan parpadeando en el borde de la reserva cargue/descargue la
   batería en círculo. La excepción: con SOC en el suelo físico el OFF
   de protección se escribe al momento.
+- **`off_grid` y el VE:** si durante una carga VE el SOC llega a
+  `reserve_soc_pct`, `off_grid` queda OFF enganchado hasta que el
+  cargador deja de reportar `charging` — el coche pasa a la red y no
+  vuelve a isla aunque el SOC se recupere a mitad de sesión.
 - **Automatización PVPC legada:** la que cargaba en horas baratas se
   desactiva sola mientras haya un modo ejecutor y se restaura al volver
   a `shadow`/`manual`/`safe` o al quitar `enable_control`.
@@ -208,10 +218,117 @@ SOC shutdown/low, tensiones) ni el switch `microinverter_export_cut_off`
 - En el meta del plan, `offgrid` muestra el estado de la guardia:
   `og_ok:on|off` (estado = demanda), `og_pending:on|off:N` (demanda
   pendiente, N evaluaciones de 8), `og_written` / `og_rate_limited` /
-  `og_low_soc`…
+  `og_low_soc` / `og_ev_floor_hold` (latch VE: OFF retenido hasta el
+  fin de la sesión)…
 - Servicio `deye_smart_energy_manager.reoptimize` — fuerza un
   recálculo inmediato del plan (útil tras enchufar el VE, cambiar el
   límite de carga o corregir una previsión).
 - Logbook: cada orden ejecutada con su motivo.
 - `config/deye_smart_energy_manager/plan_log.jsonl` — historial de
   planes en JSON.
+
+---
+
+## 8. Limitador de importación de red (fuera de DSEM)
+
+`automation.deye_limitar_carga_de_bateria_a_grid_max_import` es una
+automatización independiente de DSEM (funciona en cualquier modo,
+incluido `manual`). Su misión: que la **importación total de red nunca
+supere `Grid Max Import Power`** del inversor
+(`number.deye_sun_15k_sg05lp3_eu_sm2_grid_max_import_power`), que en GTS
+está fijado a **9.000 W**.
+
+### Cómo funciona
+
+Cada vez que el inversor publica una lectura de potencia de red (y cada
+minuto por seguridad) recalcula la corriente de carga de batería
+permitida y la escribe en
+`number.deye_sun_15k_sg05lp3_eu_sm2_battery_grid_charging_current`:
+
+```
+I_bat = (Grid Max Import − importación sin batería − margen) / V_batería
+```
+
+- `importación sin batería` = lo que consume la casa + VE sin contar lo
+  que la batería está cargando desde red (`grid_power` − `battery_power`
+  cuando carga).
+- `margen` = **500 W** de seguridad (variable `margen_w`, editable en la
+  automatización).
+- El resultado se satura a `[0, battery_max_charging_current]` (100 A en
+  GTS): con margen suficiente la carga vuelve sola a plena corriente.
+- Solo escribe si el ajuste es de **5 A o más** — no machaca el inversor
+  con escrituras por ruido de sensores.
+- Si casa + VE ya superan el límite por sí solos, la corriente cae a
+  **0 A**: la carga de batería se pausa hasta que sobre margen.
+
+### Ejemplo real (noche de despliegue)
+
+VE cargando a 4,5 kW + casa 1,8 kW + batería a 100 A (5,1 kW) →
+importación 11,4 kW > 9 kW. El limitador bajó la corriente a 41 A
+(~2,2 kW) y la importación quedó en 8,6 kW. Al terminar la carga del VE
+a la 1:30, la corriente vuelve sola a ~100 A en la siguiente evaluación.
+
+### Convivencia con el resto del sistema
+
+- **PVPC** (`pvpc_carga_bateria_deye_en_horas_baratas`) decide **cuándo**
+  cargar (switch on/off en horas baratas); el limitador decide **a qué
+  ritmo**. No se pisan.
+- **DSEM** gestiona el mismo switch en los slots `charge_grid` /
+  `soc_reserve_charge`; el limitador solo dimensiona la corriente, así
+  que protege igualmente las cargas ordenadas por el plan.
+- Si cambias `Grid Max Import Power` en el inversor, el limitador lee el
+  nuevo valor en la siguiente evaluación — no hay que tocar nada más.
+
+## 9. Corriente del cargador VE según contexto
+
+`automation.cargador_ve_ajustar_corriente_segun_contexto` ajusta la
+consigna de corriente del cargador
+(`number.de_ev_charger_charge_current`, pasos discretos de 6 a 32 A/fase,
+~690 W por amperio/fase en trifásica) según el contexto. Se activa o
+desactiva desde la tarjeta Cargador (botón «Corriente automática» en la
+sección Ajustes).
+
+### Con red conectada — dinámico
+
+```
+I_VE = (Grid Max Import − consumo casa − carga batería − 500 W) / 690 W
+→ se redondea hacia abajo al paso disponible
+```
+
+El VE tiene **prioridad** sobre la carga de batería: el limitador de §8
+rellena el hueco que la consigna del VE deje libre. Si subes
+`Grid Max Import`, la consigna sube sola.
+
+### En isla — escalonado por SOC
+
+Los umbrales se derivan de los registros del propio inversor (los que
+DSEM respeta), más un margen configurable:
+
+| SOC de batería | Consigna |
+|---|---|
+| ≥ `battery_restart_soc` (50 %) | 10 A |
+| ≥ `battery_low_soc` + margen (35 + 5 = 40 %) | 8 A |
+| > `battery_low_soc` (35 %) | 6 A |
+| ≤ `battery_low_soc` (35 %) | **parada total** (pulsa Stop) |
+
+- **`input_number.cargador_ve_margen_soc_bajo`** (slider 0–30 %,
+  por defecto 5): colchón sobre el Low SOC para el piso de 8 A. Ajustable
+  desde la UI.
+- **Parada por reserva**: en isla y cargando, si el SOC llega al
+  `battery_low_soc` (35 %) la automatización pulsa Stop para dejar la
+  reserva a la casa. No reanuda sola — reanudación manual o por replug.
+- Solo escribe cuando el paso objetivo cambia; se reevalúa con cada
+  lectura de potencia/SOC y cada 2 min por barrido.
+
+### Motivo de parada en el aviso de fin de carga
+
+El sensor de plantilla `sensor.cargador_ve_motivo_de_parada` clasifica
+por qué terminó una sesión, y
+`automation.cargador_ve_aviso_fin_de_carga` lo incluye en la notificación
+cuando la carga se detiene sin completarse:
+
+1. `Cable desconectado` — el cargador pasó a `idle`
+2. `Reserva de batería (…% en modo isla)` — isla + SOC ≤ Low SOC
+3. `Fin del periodo programado (hh:mm-hh:mm)` — la parada ocurrió en los
+   5 min siguientes a la hora de fin de la ventana armada
+4. `Parada manual (botón, tarjeta o app)` — cualquier otro caso

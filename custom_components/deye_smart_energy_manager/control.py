@@ -15,7 +15,9 @@ Writable surface (all gated by mode + ``enable_control``):
     blocks grid charging. Verified live: this inverter only discharges
     to the house load when ``off_grid`` is ON. Writes additionally
     require the same demand for OFFGRID_WRITE_PERSIST_EVALS
-    consecutive evaluations (anti-flap hysteresis).
+    consecutive evaluations (anti-flap hysteresis), and an EV-session
+    latch forces OFF once the SOC reaches ``reserve_soc_pct`` while
+    the car charges, holding it until the session ends.
 
 Safety gates (all must pass before any service call):
   * mode in CONTROL_MODES and ``enable_control`` option on
@@ -41,9 +43,11 @@ from .const import (
     CONF_ENABLE_CONTROL,
     CONF_GRID_CHARGE_SWITCH_ENTITY,
     CONF_PVPC_AUTOMATION_ENTITY,
+    CONF_RESERVE_SOC_PCT,
     CONTROL_MODES,
     DEFAULT_GRID_CHARGE_SWITCH_ENTITY,
     DEFAULT_PVPC_AUTOMATION_ENTITY,
+    DEFAULT_RESERVE_SOC_PCT,
     MODE_AUTO_EXPORT,
     DOMAIN,
 )
@@ -453,6 +457,7 @@ async def _offgrid_guard(hass, entry, coordinator, snapshot) -> str | None:
     if not active:
         coordinator._offgrid_pending_want = None
         coordinator._offgrid_pending_count = 0
+        coordinator._offgrid_ev_floor_latch = False
         # Restore a DSEM-owned ON state when control is no longer active.
         if entity_id and store.pop(marker, False):
             state = hass.states.get(entity_id)
@@ -491,6 +496,27 @@ async def _offgrid_guard(hass, entry, coordinator, snapshot) -> str | None:
     soc = snapshot.battery_soc_pct
     low_soc = soc is not None and soc <= OFFGRID_MIN_SOC_PCT
 
+    # EV-session floor latch: while the EV charges in island the battery
+    # drains to the plan's reserve floor and the slot-0 action then flips
+    # discharge <-> charge_grid on ~10-min cycles — each ON phase loses a
+    # few SOC points to the car and each OFF phase buys them back from
+    # the grid (observed live 2026-11-28: 7 cycles, ~14 relay writes in
+    # one night). Once the SOC reaches ``reserve_soc_pct`` during a
+    # charging session, force OFF for the rest of that session so the
+    # car is paid by the grid; the latch releases when the EV stops.
+    ev_floor = float(
+        entry.options.get(CONF_RESERVE_SOC_PCT, DEFAULT_RESERVE_SOC_PCT)
+    )
+    ev_charging = (snapshot.ev_state or "").lower() == "charging"
+    ev_latch = getattr(coordinator, "_offgrid_ev_floor_latch", False)
+    if not ev_charging:
+        ev_latch = False
+    elif soc is not None and soc <= ev_floor:
+        ev_latch = True
+    coordinator._offgrid_ev_floor_latch = ev_latch
+    if ev_latch:
+        want_on = False
+
     if want_on:
         # Do not fight the outage automation: if the grid voltage is
         # genuinely absent the island logic owns this switch. NOTE the
@@ -516,7 +542,7 @@ async def _offgrid_guard(hass, entry, coordinator, snapshot) -> str | None:
         else:
             store.pop(marker, None)
         coordinator._offgrid_failures = 0
-        return f"og_ok:{want}"
+        return "og_ev_floor_hold" if ev_latch else f"og_ok:{want}"
 
     # Persistence hysteresis: the slot-0 action can flap around the
     # SOC reserve boundary (discharge <-> charge_grid/import), which
@@ -526,8 +552,10 @@ async def _offgrid_guard(hass, entry, coordinator, snapshot) -> str | None:
     # OFFGRID_WRITE_PERSIST_EVALS consecutive evaluations. Bypassed
     # (together with the write rate limit) when the switch is ON and
     # the SOC already sits at the physical floor — that OFF is a
-    # battery-protection write and cannot wait.
-    if state.state == "on" and not want_on and low_soc:
+    # battery-protection write and cannot wait. The EV-floor latch
+    # bypasses it for the same reason: the OFF must land before the
+    # car drains the reserve further.
+    if state.state == "on" and not want_on and (low_soc or ev_latch):
         coordinator._offgrid_pending_want = None
         coordinator._offgrid_pending_count = 0
     else:

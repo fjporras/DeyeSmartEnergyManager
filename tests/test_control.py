@@ -6,7 +6,11 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from dsem import control
-from dsem.const import CONF_ENABLE_CONTROL, DOMAIN
+from dsem.const import (
+    CONF_ENABLE_CONTROL,
+    CONF_RESERVE_SOC_PCT,
+    DOMAIN,
+)
 from dsem.model import EnergySnapshot
 
 P = control.OFFGRID_WRITE_PERSIST_EVALS
@@ -67,9 +71,11 @@ class _Coordinator:
         return PREFIX
 
 
-def _snap(soc=50.0):
+def _snap(soc=50.0, ev_state=None):
     return EnergySnapshot(
-        timestamp=datetime.now(timezone.utc), battery_soc_pct=soc
+        timestamp=datetime.now(timezone.utc),
+        battery_soc_pct=soc,
+        ev_state=ev_state,
     )
 
 
@@ -182,3 +188,39 @@ def test_state_match_resets_pending():
     hass.states.map[SWITCH] = "on"  # external write mid-persistence
     assert _run(hass, entry, coord, snap) == "og_ok:on"
     assert coord._offgrid_pending_count == 0
+
+
+def test_ev_floor_latch_holds_off_until_session_ends():
+    # Islanded + EV charging, SOC reaches the reserve floor: the OFF
+    # bypasses persistence like the low-SOC protection write.
+    hass, entry, coord, snap = _env(
+        switch="on", action="discharge", soc=40.0
+    )
+    entry.options[CONF_RESERVE_SOC_PCT] = 40.0
+    snap = _snap(soc=40.0, ev_state="charging")
+    assert _run(hass, entry, coord, snap) == "og_written:off"
+    assert hass.states.map[SWITCH] == "off"
+    # While the session continues the latch holds OFF even with a
+    # recovered SOC and a plan still wanting discharge.
+    snap = _snap(soc=60.0, ev_state="charging")
+    for _ in range(2 * P):
+        assert _run(hass, entry, coord, snap) == "og_ev_floor_hold"
+    assert hass.states.map[SWITCH] == "off"
+    # Charge ends: the latch releases and the plan may island again.
+    coord._offgrid_last_write = None
+    snap = _snap(soc=60.0, ev_state="sleep")
+    for _ in range(P - 1):
+        assert _run(hass, entry, coord, snap).startswith("og_pending:on")
+    assert _run(hass, entry, coord, snap) == "og_written:on"
+    assert hass.states.map[SWITCH] == "on"
+
+
+def test_ev_latch_blocks_island_when_already_below_floor():
+    hass, entry, coord, snap = _env(
+        switch="off", action="discharge", soc=30.0
+    )
+    entry.options[CONF_RESERVE_SOC_PCT] = 40.0
+    snap = _snap(soc=30.0, ev_state="charging")
+    for _ in range(2 * P):
+        assert _run(hass, entry, coord, snap) == "og_ev_floor_hold"
+    assert hass.services.calls == []
