@@ -332,3 +332,43 @@ cuando la carga se detiene sin completarse:
 3. `Fin del periodo programado (hh:mm-hh:mm)` — la parada ocurrió en los
    5 min siguientes a la hora de fin de la ventana armada
 4. `Parada manual (botón, tarjeta o app)` — cualquier otro caso
+
+Los avisos de `completada`/`detenida` solo se envían si el tramo
+`charging` previo duró **≥60 s** — los parpadeos que el firmware produce
+al rearmar ventanas ya no generan notificaciones (incidente 28-11:
+~30 avisos en 10 min). La rama `fallo` sigue avisando siempre.
+
+## 10. Horarios del cargador VE (varios periodos)
+
+`automation.cargador_ve_aplicar_horario_de_carga` gestiona el DP 151
+(`charge_mode`) del cargador. El hardware solo guarda **una** ventana,
+así que la automatización arma en cada momento la que toca entre los 3
+periodos de la tarjeta (P1 = `horario_programado`, P2/P3 =
+`periodo_N_activo` + sus `input_datetime`):
+
+| Situación | `charge_mode` | Resultado |
+|---|---|---|
+| Dentro de una ventana activa | `m=0` (inmediato) | El VE carga al enchufar |
+| Fuera, con ventana próxima | `m=1` armada (`ss`/`se`) | Espera al inicio |
+| Sin periodos activos | `m=0` | Carga inmediata |
+
+**Por qué `m=0` dentro de ventana:** el firmware 9.2.5 solo auto-arranca
+una carga en el borde `ss` de una ventana armada — si el coche se
+enchufa *dentro* de la ventana, `m=1` no lo inicia (lo intenta en
+ciclos de ~20 s y aborta). Incidente real 28-11: enchufado a las 23 h
+no cargó hasta un Start manual a las 03:09. Al cruzar el fin de
+ventana, el barrido de cada minuto escribe `m=1` con la siguiente —
+pendiente de verificar que el cargador detiene entonces la carga.
+
+**Cuándo se reevalúa:** al cambiar cualquier helper, cada minuto
+(cubre las fronteras con ≤60 s), a medianoche y al arrancar HA. **No**
+reacciona al estado del cargador — ese disparo realimentaba las
+escrituras del DP151 creando un bucle con el firmware (parpadeos
+`charging↔plugged_in`, ~30 notificaciones la noche del 28-11).
+
+**Sincronización con la app dé:**
+`automation.cargador_ve_sincronizar_horario_del_cargador` adopta los
+cambios del DP hechos desde fuera de HA: `m=1` externo → se adopta como
+Periodo 1; `m=0` externo → desactiva los 3 periodos; `m=2` se ignora.
+Las escrituras propias se ignoran comparando con
+`input_text.cargador_ve_ultimo_horario_escrito`.
